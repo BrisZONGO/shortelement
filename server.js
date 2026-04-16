@@ -24,7 +24,7 @@ const { verifierToken, verifierAdmin } = require('./middleware/auth');
 // const upload = require('./middleware/upload');
 
 const app = express();
-/ Dans server.js
+// Dans server.js
 
 // ========== CONFIGURATION AVANCÉE ==========
 // Configuration CORS
