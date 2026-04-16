@@ -24,17 +24,31 @@ const { verifierToken, verifierAdmin } = require('./middleware/auth');
 // const upload = require('./middleware/upload');
 
 const app = express();
+/ Dans server.js
 
 // ========== CONFIGURATION AVANCÉE ==========
 // Configuration CORS
+// Remplacer votre configuration CORS actuelle par :
+// Configuration CORS corrigée
+const allowedOrigins = process.env.CORS_ORIGIN ? process.env.CORS_ORIGIN.split(',') : ['http://localhost:3000', 'http://localhost:3001', 'http://localhost:3002'];
+
 const corsOptions = {
-  origin: process.env.CORS_ORIGIN ? process.env.CORS_ORIGIN.split(',') : ['http://localhost:3000', 'http://localhost:5173'],
+  origin: function (origin, callback) {
+    if (!origin) return callback(null, true);
+    if (allowedOrigins.indexOf(origin) === -1) {
+      const msg = 'The CORS policy for this site does not allow access from the specified Origin.';
+      return callback(new Error(msg), false);
+    }
+    return callback(null, true);
+  },
   methods: ['GET', 'POST', 'PUT', 'DELETE', 'PATCH', 'OPTIONS'],
-  allowedHeaders: ['Content-Type', 'Authorization', 'X-Requested-With'],
+   allowedHeaders: ['Content-Type', 'Authorization', 'X-Requested-With'],
   credentials: true,
-  optionsSuccessStatus: 200,
+ optionsSuccessStatus: 200,
   maxAge: 86400 // 24 heures
 };
+
+app.use(cors(corsOptions));
 
 // Limiteur de requêtes basique (optionnel)
 const rateLimit = new Map();
