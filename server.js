@@ -30,7 +30,7 @@ const app = express();
 // Configuration CORS
 // Remplacer votre configuration CORS actuelle par :
 // Configuration CORS corrigée
-const allowedOrigins = process.env.CORS_ORIGIN ? process.env.CORS_ORIGIN.split(',') : ['http://localhost:3000', 'http://localhost:3001', 'http://localhost:3002'];
+;const allowedOrigins = process.env.CORS_ORIGIN ? process.env.CORS_ORIGIN.split(',') : ['http://localhost:3000', 'http://localhost:3001', 'http://localhost:3002', 'https://shortelement.onrender.com'];
 
 const corsOptions = {
   origin: function (origin, callback) {
