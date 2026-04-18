@@ -3,8 +3,9 @@ const mongoose = require('mongoose');
 const cors = require('cors');
 const dotenv = require('dotenv');
 const path = require('path');
+const paymentRoutes = require("./routes/paymentRoutes");
 
-process.env.NODE_ENV = 'production';
+// Chargement des variables d'environnement AVANT tout
 dotenv.config();
 
 const authRoutes = require('./routes/authRoutes');
@@ -13,7 +14,6 @@ const coursRoutes = require('./routes/coursRoutes');
 const { verifierToken, verifierAdmin } = require('./middleware/auth');
 
 const app = express();
-
 
 // =============================
 // 🔥 CORS CORRIGÉ (IMPORTANT)
@@ -47,7 +47,6 @@ app.use(cors(corsOptions));
 // ✅ Gestion PREFLIGHT
 app.options("*", cors(corsOptions));
 
-
 // =============================
 // 📦 MIDDLEWARES
 // =============================
@@ -57,6 +56,8 @@ app.use(express.urlencoded({ extended: true, limit: '10mb' }));
 app.use(express.static(path.join(__dirname, 'public')));
 app.use('/uploads', express.static(path.join(__dirname, 'uploads')));
 
+// Routes paiement
+app.use("/api/payment", paymentRoutes);
 
 // =============================
 // 🚫 RATE LIMIT SIMPLE
@@ -94,7 +95,6 @@ const rateLimiter = (req, res, next) => {
 
 app.use('/api', rateLimiter);
 
-
 // =============================
 // 🌐 ROUTES PUBLIQUES
 // =============================
@@ -105,20 +105,20 @@ app.get('/', (req, res) => {
   });
 });
 
+// Route de santé pour monitoring
 app.get('/health', (req, res) => {
-  res.json({
-    status: 'OK',
-    timestamp: new Date()
+  res.json({ 
+    status: 'healthy',
+    timestamp: new Date().toISOString(),
+    database: mongoose.connection.readyState === 1 ? 'connected' : 'disconnected'
   });
 });
-
 
 // =============================
 // 🔐 ROUTES API
 // =============================
 app.use('/api/auth', authRoutes);
 app.use('/api/cours', coursRoutes);
-
 
 // =============================
 // 🔒 ROUTES PROTÉGÉES
@@ -138,7 +138,6 @@ app.get('/api/admin/dashboard', verifierToken, verifierAdmin, (req, res) => {
   });
 });
 
-
 // =============================
 // ❌ 404
 // =============================
@@ -148,7 +147,6 @@ app.use((req, res) => {
     message: "Route non trouvée"
   });
 });
-
 
 // =============================
 // ❌ GESTION ERREURS
@@ -162,7 +160,6 @@ app.use((err, req, res, next) => {
   });
 });
 
-
 // =============================
 // 🚀 CONNEXION DB + START
 // =============================
@@ -172,11 +169,15 @@ mongoose.connect(process.env.MONGODB_URI)
 .then(() => {
   console.log("✅ MongoDB connecté");
 
-  app.listen(PORT, () => {
-    console.log(`🚀 Serveur lancé sur port ${PORT}`);
+  // ✅ CORRECTION : Écouter sur 0.0.0.0 pour accepter les connexions externes
+  app.listen(PORT, '0.0.0.0', () => {
+    console.log(`🚀 Serveur lancé sur le port ${PORT}`);
+    console.log(`📡 Local: http://localhost:${PORT}`);
+    console.log(`📡 Réseau: http://0.0.0.0:${PORT}`);
   });
 
 })
 .catch(err => {
   console.error("❌ Erreur MongoDB :", err.message);
+  process.exit(1);
 });
