@@ -14,7 +14,24 @@ const inscription = async (req, res) => {
         message: 'Les champs nom, email et mot de passe sont requis' 
       });
     }
+    // ========== PROFIL UTILISATEUR ==========
+const getProfile = async (req, res) => {
+  try {
+    // ✅ req.user contient TOUTES les infos de l'utilisateur (ajouté par middleware auth.js)
+    console.log("📋 Profil demandé par:", req.user.email);
     
+    res.json({
+      success: true,
+      message: "Profil utilisateur",
+      user: req.user  // L'utilisateur complet (sans mot de passe)
+    });
+  } catch (error) {
+    res.status(500).json({
+      success: false,
+      message: error.message
+    });
+  }
+};
     // Vérifier si l'utilisateur existe déjà
     const userExistant = await User.findOne({ email });
     if (userExistant) {
@@ -124,4 +141,8 @@ const connexion = async (req, res) => {
   }
 };
 
-module.exports = { inscription, connexion };
+module.exports = { 
+  inscription, 
+  connexion,
+  getProfile  // ← Ajoutez cette ligne
+};

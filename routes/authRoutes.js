@@ -1,13 +1,14 @@
 const express = require('express');
-const { inscription, connexion } = require('../controllers/authController');
+const { inscription, connexion, getProfile } = require('../controllers/authController');
 const { verifierToken } = require('../middleware/auth');
+
 
 const router = express.Router();
 
 // 🔓 Routes publiques
 router.post('/inscription', inscription);
 router.post('/connexion', connexion);
-
+router.get('/profil', verifierToken, getProfile);  // ← Route protégée
 // 🧪 Route test
 router.get('/test', (req, res) => res.json({ message: 'Auth OK' }));
 
