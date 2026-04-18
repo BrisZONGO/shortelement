@@ -23,7 +23,13 @@ const getProfile = async (req, res) => {
     res.json({
       success: true,
       message: "Profil utilisateur",
-      user: req.user  // L'utilisateur complet (sans mot de passe)
+      user: {
+        id: req.user._id,
+        nom: req.user.nom,
+        prenom: req.user.prenom,
+        email: req.user.email,
+        role: req.user.role
+      }
     });
   } catch (error) {
     res.status(500).json({
