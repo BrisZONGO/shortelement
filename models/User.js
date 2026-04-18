@@ -21,13 +21,35 @@ const userSchema = new mongoose.Schema({
     },
     prenom: {
         type: String,
-        trim: true
-        // PAS DE "required" ici !
+        trim: true,
+        default: ''
     },
     role: {
         type: String,
         enum: ['user', 'admin'],
         default: 'user'
+    },
+    actif: {
+        type: Boolean,
+        default: true
+    },
+    abonnement: {
+        actif: { 
+            type: Boolean, 
+            default: false 
+        },
+        expiration: { 
+            type: Date 
+        },
+        dateDebut: {
+            type: Date,
+            default: Date.now
+        },
+        forfait: {
+            type: String,
+            enum: ['mensuel', 'trimestriel', 'annuel', 'aucun'],
+            default: 'aucun'
+        }
     },
     createdAt: {
         type: Date,
@@ -38,13 +60,21 @@ const userSchema = new mongoose.Schema({
 // Hacher le mot de passe avant sauvegarde
 userSchema.pre('save', async function(next) {
     if (!this.isModified('password')) return next();
-    this.password = await bcrypt.hash(this.password, 10);
+    const salt = await bcrypt.genSalt(10);
+    this.password = await bcrypt.hash(this.password, salt);
     next();
 });
 
 // Méthode pour comparer les mots de passe
 userSchema.methods.comparePassword = async function(password) {
     return await bcrypt.compare(password, this.password);
+};
+
+// Méthode pour vérifier si l'abonnement est actif
+userSchema.methods.isAbonnementActif = function() {
+    if (!this.abonnement || !this.abonnement.actif) return false;
+    if (!this.abonnement.expiration) return true;
+    return new Date() < this.abonnement.expiration;
 };
 
 module.exports = mongoose.model('User', userSchema);
