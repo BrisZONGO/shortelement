@@ -15,11 +15,10 @@ const inscription = async (req, res) => {
       });
     }
     // ========== PROFIL UTILISATEUR ==========
+// ✅ Fonction getProfile AJOUTÉE
 const getProfile = async (req, res) => {
   try {
-    // ✅ req.user contient TOUTES les infos de l'utilisateur (ajouté par middleware auth.js)
-    console.log("📋 Profil demandé par:", req.user.email);
-    
+    // L'utilisateur est déjà chargé par le middleware verifierToken
     res.json({
       success: true,
       message: "Profil utilisateur",
@@ -32,12 +31,13 @@ const getProfile = async (req, res) => {
       }
     });
   } catch (error) {
-    res.status(500).json({
-      success: false,
-      message: error.message
+    res.status(500).json({ 
+      success: false, 
+      message: error.message 
     });
   }
 };
+
     // Vérifier si l'utilisateur existe déjà
     const userExistant = await User.findOne({ email });
     if (userExistant) {
@@ -150,5 +150,5 @@ const connexion = async (req, res) => {
 module.exports = { 
   inscription, 
   connexion,
-  getProfile  // ← Ajoutez cette ligne
+  getProfile  
 };
