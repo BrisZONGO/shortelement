@@ -1,10 +1,13 @@
 const jwt = require('jsonwebtoken');
 const User = require('../models/User');
 
-// Clé secrète - Idéalement dans .env, mais on garde votre version
+// Clé secrète - Idéalement dans .env
 const SECRET_KEY = process.env.JWT_SECRET || 'votre_cle_secrete_tres_longue_et_complexe_123456789';
 
-// Middleware pour vérifier le token (votre version existante améliorée)
+// =============================
+// 🔐 MIDDLEWARE PRINCIPAL
+// =============================
+// Vérifie le token et charge l'utilisateur complet
 const verifierToken = async (req, res, next) => {
   const token = req.headers['authorization']?.split(' ')[1];
   
@@ -17,18 +20,23 @@ const verifierToken = async (req, res, next) => {
   
   try {
     const decoded = jwt.verify(token, SECRET_KEY);
+    
+    // Stocker les infos du token
     req.userId = decoded.userId;
     req.userRole = decoded.role;
-    req.userEmail = decoded.email; // Ajout de l'email pour plus d'infos
+    req.userEmail = decoded.email;
     
-    // Optionnel: Vérifier si l'utilisateur existe toujours en base
-    const user = await User.findById(req.userId);
+    // ✅ IMPORTANT : Récupérer l'utilisateur complet depuis la base de données
+    const user = await User.findById(req.userId).select('-password');
     if (!user) {
       return res.status(401).json({ 
         success: false,
         message: 'Utilisateur non trouvé' 
       });
     }
+    
+    // ✅ Ajouter l'objet utilisateur complet à la requête
+    req.user = user;
     
     next();
   } catch (error) {
@@ -51,9 +59,15 @@ const verifierToken = async (req, res, next) => {
   }
 };
 
-// Middleware pour vérifier si c'est un admin (votre version existante)
+// =============================
+// 👑 MIDDLEWARE ADMIN
+// =============================
+// Vérifie si l'utilisateur est admin
 const verifierAdmin = async (req, res, next) => {
-  if (req.userRole !== 'admin') {
+  // Utiliser req.userRole ou req.user.role
+  const userRole = req.userRole || req.user?.role;
+  
+  if (userRole !== 'admin') {
     return res.status(403).json({ 
       success: false,
       message: 'Accès réservé aux administrateurs' 
@@ -62,12 +76,17 @@ const verifierAdmin = async (req, res, next) => {
   next();
 };
 
-// NOUVEAU: Middleware pour vérifier si l'utilisateur est propriétaire ou admin
+// =============================
+// 👤 MIDDLEWARE PROPRIÉTAIRE
+// =============================
+// Vérifie si l'utilisateur est propriétaire ou admin
 const verifierProprietaireOuAdmin = (req, res, next) => {
   const userId = req.params.id || req.params.userId;
+  const currentUserId = req.userId || req.user?._id;
+  const userRole = req.userRole || req.user?.role;
   
   // Si c'est l'utilisateur lui-même ou un admin, on autorise
-  if (req.userId === userId || req.userRole === 'admin') {
+  if (currentUserId === userId || userRole === 'admin') {
     next();
   } else {
     return res.status(403).json({ 
@@ -77,7 +96,10 @@ const verifierProprietaireOuAdmin = (req, res, next) => {
   }
 };
 
-// NOUVEAU: Middleware optionnel (ne bloque pas si pas de token)
+// =============================
+// 🔓 MIDDLEWARE OPTIONNEL
+// =============================
+// Ne bloque pas si pas de token, mais charge l'utilisateur si token présent
 const verifierTokenOptionnel = async (req, res, next) => {
   const token = req.headers['authorization']?.split(' ')[1];
   
@@ -86,6 +108,13 @@ const verifierTokenOptionnel = async (req, res, next) => {
       const decoded = jwt.verify(token, SECRET_KEY);
       req.userId = decoded.userId;
       req.userRole = decoded.role;
+      req.userEmail = decoded.email;
+      
+      // Charger l'utilisateur complet si disponible
+      const user = await User.findById(req.userId).select('-password');
+      if (user) {
+        req.user = user;
+      }
     } catch (error) {
       // On ignore l'erreur, l'utilisateur n'est pas authentifié
     }
@@ -93,6 +122,9 @@ const verifierTokenOptionnel = async (req, res, next) => {
   next();
 };
 
+// =============================
+// 📤 EXPORTATION
+// =============================
 module.exports = { 
   verifierToken, 
   verifierAdmin, 
