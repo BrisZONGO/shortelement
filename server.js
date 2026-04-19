@@ -5,24 +5,30 @@ const dotenv = require('dotenv');
 const path = require('path');
 const paymentRoutes = require("./routes/paymentRoutes");
 const { startCronJobs } = require("./services/cronService");
-// Ajoutez après les autres imports
-const adminController = require('./controllers/adminController');
+
 // Chargement des variables d'environnement AVANT tout
 dotenv.config();
+
 // Dans server.js
-const adminController = require('./controllers/adminController');
+const authRoutes = require('./routes/authRoutes');
+const coursRoutes = require('./routes/coursRoutes');
+const adminRoutes = require("./routes/adminRoutes");  // ← Si vous avez cette ligne
+const adminController = require('./controllers/adminController');  // ← UNE SEULE FOIS
+
+const { verifierToken, verifierAdmin } = require('./middleware/auth');
+
 
 // Routes admin
 app.get('/api/admin/stats', verifierToken, verifierAdmin, adminController.getStats);
 app.get('/api/admin/users', verifierToken, verifierAdmin, adminController.getAllUsers);
 app.put('/api/admin/users/:userId/role', verifierToken, verifierAdmin, adminController.updateUserRole);
-const authRoutes = require('./routes/authRoutes');
-const coursRoutes = require('./routes/coursRoutes');
 
-const { verifierToken, verifierAdmin } = require('./middleware/auth');
+
+
+
 
 const app = express();
-const adminRoutes = require("./routes/adminRoutes");
+
 app.use("/api/admin", adminRoutes);
 
 // =============================

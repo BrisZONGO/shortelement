@@ -16,10 +16,8 @@ router.get('/', getAllCours);
 router.get('/recherche', searchCours);
 router.get('/:id', getCoursById);
 
-// Routes protégées (authentification requise)
+// Routes protégées
 router.post('/', verifierToken, verifierAdmin, createCours);
-
-// Routes admin
 router.put('/:id', verifierToken, verifierAdmin, updateCours);
 router.delete('/:id', verifierToken, verifierAdmin, deleteCours);
 
