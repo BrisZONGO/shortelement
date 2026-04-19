@@ -4,16 +4,26 @@ const cors = require('cors');
 const dotenv = require('dotenv');
 const path = require('path');
 const paymentRoutes = require("./routes/paymentRoutes");
-
+const { startCronJobs } = require("./services/cronService");
+// Ajoutez après les autres imports
+const adminController = require('./controllers/adminController');
 // Chargement des variables d'environnement AVANT tout
 dotenv.config();
+// Dans server.js
+const adminController = require('./controllers/adminController');
 
+// Routes admin
+app.get('/api/admin/stats', verifierToken, verifierAdmin, adminController.getStats);
+app.get('/api/admin/users', verifierToken, verifierAdmin, adminController.getAllUsers);
+app.put('/api/admin/users/:userId/role', verifierToken, verifierAdmin, adminController.updateUserRole);
 const authRoutes = require('./routes/authRoutes');
 const coursRoutes = require('./routes/coursRoutes');
 
 const { verifierToken, verifierAdmin } = require('./middleware/auth');
 
 const app = express();
+const adminRoutes = require("./routes/adminRoutes");
+app.use("/api/admin", adminRoutes);
 
 // =============================
 // 🔥 CORS CORRIGÉ (IMPORTANT)
@@ -169,7 +179,11 @@ mongoose.connect(process.env.MONGODB_URI)
 .then(() => {
   console.log("✅ MongoDB connecté");
 
-  // ✅ CORRECTION : Écouter sur 0.0.0.0 pour accepter les connexions externes
+  // ✅ Démarrer les tâches cron (vérifications quotidiennes, rappels, etc.)
+  startCronJobs();
+  console.log("✅ Tâches planifiées (cron) démarrées");
+
+  // ✅ Écouter sur 0.0.0.0 pour accepter les connexions externes
   app.listen(PORT, '0.0.0.0', () => {
     console.log(`🚀 Serveur lancé sur le port ${PORT}`);
     console.log(`📡 Local: http://localhost:${PORT}`);
