@@ -8,7 +8,6 @@ const {
   searchCours
 } = require('../controllers/coursController');
 const { verifierToken, verifierAdmin } = require('../middleware/auth');
-const verifierAbonnement = require("../middleware/abonnement");  // ← UNE SEULE FOIS
 
 const router = express.Router();
 
