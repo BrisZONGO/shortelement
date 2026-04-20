@@ -6,7 +6,6 @@ const path = require('path');
 
 dotenv.config();
 
-// ✅ INIT APP AVANT TOUT
 const app = express();
 
 // =============================
@@ -14,23 +13,19 @@ const app = express();
 // =============================
 const authRoutes = require('./routes/authRoutes');
 const coursRoutes = require('./routes/coursRoutes');
-const paymentRoutes = require("./routes/paymentRoutes");
-const adminRoutes = require("./routes/adminRoutes");
+const paymentRoutes = require('./routes/paymentRoutes');
+const adminRoutes = require('./routes/adminRoutes');
 
-const { startCronJobs } = require("./services/cronService");
-const { verifierToken, verifierAdmin } = require('./middleware/auth');
+const { startCronJobs } = require('./services/cronService');
 
 // =============================
-// 🔥 CORS
+// 🔥 CORS (CORRIGÉ)
 // =============================
-const allowedOrigins = [
-  "http://localhost:3000",
-  "https://concours-directs-et-professionnels.netlify.app"
-];
-
 app.use(cors({
-  origin: allowedOrigins,
-  methods: ["GET", "POST", "PUT", "DELETE", "PATCH"],
+  origin: [
+    "http://localhost:3000",
+    "https://concours-directs-et-professionnels.netlify.app"
+  ],
   credentials: true
 }));
 
@@ -44,35 +39,6 @@ app.use(express.urlencoded({ extended: true }));
 
 app.use(express.static(path.join(__dirname, 'public')));
 app.use('/uploads', express.static(path.join(__dirname, 'uploads')));
-
-// =============================
-// 🚫 RATE LIMIT
-// =============================
-const rateLimit = new Map();
-
-app.use('/api', (req, res, next) => {
-  const ip = req.ip;
-  const now = Date.now();
-
-  if (!rateLimit.has(ip)) {
-    rateLimit.set(ip, { count: 1, time: now });
-    return next();
-  }
-
-  const data = rateLimit.get(ip);
-
-  if (now - data.time > 15 * 60 * 1000) {
-    rateLimit.set(ip, { count: 1, time: now });
-    return next();
-  }
-
-  if (data.count > 100) {
-    return res.status(429).json({ message: "Trop de requêtes" });
-  }
-
-  data.count++;
-  next();
-});
 
 // =============================
 // 🌐 ROUTES PUBLIQUES
@@ -95,15 +61,8 @@ app.use('/api/auth', authRoutes);
 app.use('/api/cours', coursRoutes);
 app.use('/api/payment', paymentRoutes);
 
-// ✅ 👉 TRÈS IMPORTANT (TA DEMANDE)
-app.use("/api/admin", adminRoutes);
-
-// =============================
-// 🔒 ROUTES PROTÉGÉES TEST
-// =============================
-app.get('/api/protected', verifierToken, (req, res) => {
-  res.json({ success: true });
-});
+// ✅ ADMIN (TRÈS IMPORTANT)
+app.use('/api/admin', adminRoutes);
 
 // =============================
 // ❌ 404
@@ -119,8 +78,12 @@ app.use((req, res) => {
 // ❌ ERROR HANDLER
 // =============================
 app.use((err, req, res, next) => {
-  console.error(err.message);
-  res.status(500).json({ success: false, message: err.message });
+  console.error("❌", err.message);
+
+  res.status(500).json({
+    success: false,
+    message: err.message || "Erreur serveur"
+  });
 });
 
 // =============================
@@ -135,9 +98,9 @@ mongoose.connect(process.env.MONGODB_URI)
   startCronJobs();
 
   app.listen(PORT, () => {
-    console.log(`🚀 Serveur sur port ${PORT}`);
+    console.log(`🚀 Serveur lancé sur ${PORT}`);
   });
 })
 .catch(err => {
-  console.error(err);
+  console.error("❌ MongoDB:", err.message);
 });

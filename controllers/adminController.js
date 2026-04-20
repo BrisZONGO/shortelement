@@ -2,37 +2,59 @@ const User = require("../models/User");
 const Cours = require("../models/Cours");
 
 /**
- * Récupère les statistiques pour l'administrateur
- * GET /api/admin/stats
+ * 📊 GET /api/admin/stats
+ * Statistiques admin complètes
  */
 const getStats = async (req, res) => {
   try {
-    // Statistiques utilisateurs
+    // =============================
+    // 👥 USERS
+    // =============================
     const totalUsers = await User.countDocuments();
+
     const premiumUsers = await User.countDocuments({
       "abonnement.actif": true
     });
-    const adminUsers = await User.countDocuments({ role: 'admin' });
 
-    // Statistiques cours
+    const adminUsers = await User.countDocuments({
+      role: "admin"
+    });
+
+    // =============================
+    // 📚 COURS
+    // =============================
     const totalCourses = await Cours.countDocuments();
 
-    // 💰 Calcul des revenus (exemple: 5000 FCFA par abonnement premium)
-    const prixAbonnement = 5000;
+    // =============================
+    // 💰 REVENUS
+    // =============================
+    const prixAbonnement = 5000; // FCFA
     const revenus = premiumUsers * prixAbonnement;
 
-    // Récupération des détails pour l'affichage
+    // =============================
+    // 🆕 RÉCENTS
+    // =============================
     const recentUsers = await User.find()
       .sort({ createdAt: -1 })
       .limit(5)
-      .select('-password');
+      .select("-password");
 
     const recentCourses = await Cours.find()
       .sort({ createdAt: -1 })
       .limit(5);
 
+    // =============================
+    // ✅ RÉPONSE (FUSION PROPRE)
+    // =============================
     res.json({
       success: true,
+
+      // 👉 IMPORTANT : pour ton frontend
+      totalUsers,
+      premiumUsers,
+      revenus,
+
+      // 👉 stats détaillées
       stats: {
         totalUsers,
         premiumUsers,
@@ -41,6 +63,8 @@ const getStats = async (req, res) => {
         revenus,
         prixAbonnement
       },
+
+      // 👉 données récentes
       recent: {
         users: recentUsers,
         courses: recentCourses
@@ -49,8 +73,9 @@ const getStats = async (req, res) => {
 
   } catch (err) {
     console.error("❌ Erreur getStats:", err);
-    res.status(500).json({ 
-      success: false, 
+
+    res.status(500).json({
+      success: false,
       message: "Erreur lors de la récupération des statistiques",
       error: err.message
     });
@@ -58,40 +83,42 @@ const getStats = async (req, res) => {
 };
 
 /**
- * Récupère la liste de tous les utilisateurs (admin uniquement)
- * GET /api/admin/users
+ * 👥 GET /api/admin/users
  */
 const getAllUsers = async (req, res) => {
   try {
-    const users = await User.find().select('-password').sort({ createdAt: -1 });
-    
+    const users = await User.find()
+      .select("-password")
+      .sort({ createdAt: -1 });
+
     res.json({
       success: true,
       count: users.length,
       users
     });
+
   } catch (err) {
     console.error("❌ Erreur getAllUsers:", err);
-    res.status(500).json({ 
-      success: false, 
-      message: err.message 
+
+    res.status(500).json({
+      success: false,
+      message: err.message
     });
   }
 };
 
 /**
- * Modifie le rôle d'un utilisateur (admin uniquement)
- * PUT /api/admin/users/:userId/role
+ * 🔁 PUT /api/admin/users/:userId/role
  */
 const updateUserRole = async (req, res) => {
   try {
     const { userId } = req.params;
     const { role } = req.body;
 
-    if (!['user', 'admin'].includes(role)) {
-      return res.status(400).json({ 
-        success: false, 
-        message: "Rôle invalide" 
+    if (!["user", "admin"].includes(role)) {
+      return res.status(400).json({
+        success: false,
+        message: "Rôle invalide"
       });
     }
 
@@ -99,12 +126,12 @@ const updateUserRole = async (req, res) => {
       userId,
       { role },
       { new: true }
-    ).select('-password');
+    ).select("-password");
 
     if (!user) {
-      return res.status(404).json({ 
-        success: false, 
-        message: "Utilisateur non trouvé" 
+      return res.status(404).json({
+        success: false,
+        message: "Utilisateur non trouvé"
       });
     }
 
@@ -113,11 +140,13 @@ const updateUserRole = async (req, res) => {
       message: `Rôle modifié en ${role}`,
       user
     });
+
   } catch (err) {
     console.error("❌ Erreur updateUserRole:", err);
-    res.status(500).json({ 
-      success: false, 
-      message: err.message 
+
+    res.status(500).json({
+      success: false,
+      message: err.message
     });
   }
 };
