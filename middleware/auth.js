@@ -1,134 +1,116 @@
-const jwt = require('jsonwebtoken');
+const express = require('express');
+const router = express.Router();
+
+const { inscription, connexion } = require('../controllers/authController');
+const { verifierToken, verifierAdmin } = require('../middleware/auth');
 const User = require('../models/User');
 
-// Clé secrète - Idéalement dans .env
-const SECRET_KEY = process.env.JWT_SECRET || 'votre_cle_secrete_tres_longue_et_complexe_123456789';
+// 🔓 PUBLIC
+router.post('/inscription', inscription);
+router.post('/connexion', connexion);
 
-// =============================
-// 🔐 MIDDLEWARE PRINCIPAL
-// =============================
-// Vérifie le token et charge l'utilisateur complet
-const verifierToken = async (req, res, next) => {
-  const token = req.headers['authorization']?.split(' ')[1];
-  
-  if (!token) {
-    return res.status(401).json({ 
-      success: false,
-      message: 'Accès non autorisé - Token manquant' 
-    });
-  }
-  
+// 🧪 TEST
+router.get('/test', (req, res) => res.json({ message: 'Auth OK' }));
+
+// 🔒 PROFIL
+router.get('/profil', verifierToken, (req, res) => {
+  // Utiliser req.user qui a été chargé par le middleware
+  res.json({
+    success: true,
+    user: {
+      id: req.userId,
+      email: req.userEmail,
+      role: req.userRole,
+      nom: req.user?.nom,
+      prenom: req.user?.prenom
+    }
+  });
+});
+
+// 👑 LISTE UTILISATEURS (ADMIN)
+router.get('/utilisateurs', verifierToken, verifierAdmin, async (req, res) => {
   try {
-    const decoded = jwt.verify(token, SECRET_KEY);
+    const users = await User.find().select('-password');
+
+    res.json({
+      success: true,
+      users
+    });
+
+  } catch (err) {
+    console.error("❌ Erreur liste utilisateurs:", err);
+    res.status(500).json({
+      success: false,
+      message: "Erreur serveur"
+    });
+  }
+});
+
+// 🗑️ SUPPRIMER UN UTILISATEUR (ADMIN)
+router.delete('/utilisateurs/:id', verifierToken, verifierAdmin, async (req, res) => {
+  try {
+    const { id } = req.params;
     
-    // Stocker les infos du token
-    req.userId = decoded.userId;
-    req.userRole = decoded.role;
-    req.userEmail = decoded.email;
+    console.log(`🔍 Tentative de suppression de l'utilisateur: ${id}`);
+    console.log(`👤 Admin connecté: ${req.userEmail} (${req.userId})`);
     
-    // ✅ IMPORTANT : Récupérer l'utilisateur complet depuis la base de données
-    const user = await User.findById(req.userId).select('-password');
+    // Empêcher la suppression de son propre compte
+    if (id === req.userId) {
+      console.log("⛔ Tentative d'auto-suppression bloquée");
+      return res.status(400).json({ 
+        success: false,
+        message: "Vous ne pouvez pas supprimer votre propre compte" 
+      });
+    }
+    
+    // Vérifier si l'utilisateur existe
+    const user = await User.findById(id);
     if (!user) {
-      return res.status(401).json({ 
+      console.log(`❌ Utilisateur ${id} non trouvé`);
+      return res.status(404).json({ 
         success: false,
-        message: 'Utilisateur non trouvé' 
+        message: "Utilisateur non trouvé" 
       });
     }
     
-    // ✅ Ajouter l'objet utilisateur complet à la requête
-    req.user = user;
+    // Supprimer l'utilisateur
+    await User.findByIdAndDelete(id);
     
-    next();
+    console.log(`✅ Utilisateur supprimé: ${user.email} (${user.nom} ${user.prenom})`);
+    
+    res.json({ 
+      success: true, 
+      message: `Utilisateur ${user.email} supprimé avec succès`
+    });
+    
   } catch (error) {
-    if (error.name === 'JsonWebTokenError') {
-      return res.status(401).json({ 
-        success: false,
-        message: 'Token invalide' 
-      });
-    }
-    if (error.name === 'TokenExpiredError') {
-      return res.status(401).json({ 
-        success: false,
-        message: 'Token expiré' 
-      });
-    }
-    return res.status(401).json({ 
+    console.error("❌ Erreur suppression utilisateur:", error);
+    res.status(500).json({ 
       success: false,
-      message: 'Erreur d\'authentification' 
+      message: error.message || "Erreur serveur lors de la suppression" 
     });
   }
-};
+});
 
-// =============================
-// 👑 MIDDLEWARE ADMIN
-// =============================
-// Vérifie si l'utilisateur est admin
-const verifierAdmin = async (req, res, next) => {
-  // Utiliser req.userRole ou req.user.role
-  const userRole = req.userRole || req.user?.role;
-  
-  if (userRole !== 'admin') {
-    return res.status(403).json({ 
-      success: false,
-      message: 'Accès réservé aux administrateurs' 
-    });
-  }
-  next();
-};
-
-// =============================
-// 👤 MIDDLEWARE PROPRIÉTAIRE
-// =============================
-// Vérifie si l'utilisateur est propriétaire ou admin
-const verifierProprietaireOuAdmin = (req, res, next) => {
-  const userId = req.params.id || req.params.userId;
-  const currentUserId = req.userId || req.user?._id;
-  const userRole = req.userRole || req.user?.role;
-  
-  // Si c'est l'utilisateur lui-même ou un admin, on autorise
-  if (currentUserId === userId || userRole === 'admin') {
-    next();
-  } else {
-    return res.status(403).json({ 
-      success: false,
-      message: 'Accès non autorisé - Vous n\'êtes pas le propriétaire' 
-    });
-  }
-};
-
-// =============================
-// 🔓 MIDDLEWARE OPTIONNEL
-// =============================
-// Ne bloque pas si pas de token, mais charge l'utilisateur si token présent
-const verifierTokenOptionnel = async (req, res, next) => {
-  const token = req.headers['authorization']?.split(' ')[1];
-  
-  if (token) {
-    try {
-      const decoded = jwt.verify(token, SECRET_KEY);
-      req.userId = decoded.userId;
-      req.userRole = decoded.role;
-      req.userEmail = decoded.email;
-      
-      // Charger l'utilisateur complet si disponible
-      const user = await User.findById(req.userId).select('-password');
-      if (user) {
-        req.user = user;
+// 📊 STATISTIQUES (ADMIN) - Optionnel
+router.get('/stats', verifierToken, verifierAdmin, async (req, res) => {
+  try {
+    const totalUsers = await User.countDocuments();
+    const totalAdmins = await User.countDocuments({ role: 'admin' });
+    const totalUsersOnly = await User.countDocuments({ role: 'user' });
+    
+    res.json({
+      success: true,
+      stats: {
+        totalUsers,
+        admins: totalAdmins,
+        users: totalUsersOnly
       }
-    } catch (error) {
-      // On ignore l'erreur, l'utilisateur n'est pas authentifié
-    }
+    });
+  } catch (error) {
+    console.error("❌ Erreur stats:", error);
+    res.status(500).json({ error: error.message });
   }
-  next();
-};
+});
 
-// =============================
-// 📤 EXPORTATION
-// =============================
-module.exports = { 
-  verifierToken, 
-  verifierAdmin, 
-  verifierProprietaireOuAdmin,
-  verifierTokenOptionnel,
-  SECRET_KEY 
-};
+module.exports = router;
