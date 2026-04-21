@@ -1,19 +1,29 @@
 const express = require('express');
+const router = express.Router();
+const { verifierToken } = require('../middleware/auth');
 const {
   initPaiement,
   confirmerPaiement,
   initPayment,
-  notifyPayment
+  notifyPayment,
+  verifierStatutPaiement
 } = require('../controllers/paymentController');
 
-const router = express.Router();
+// =============================
+// 💳 ROUTES DE PAIEMENT
+// =============================
 
 // Routes de simulation (pour tests)
 router.post('/init', initPaiement);
 router.post('/confirm', confirmerPaiement);
 
-// Routes CinetPay réelles
-router.post('/cinetpay/init', initPayment);
-router.post('/cinetpay/notify', notifyPayment);
+// Route d'initiation CinetPay (réelle)
+router.post('/init-cinetpay', initPayment);
+
+// Webhook de notification CinetPay (route publique)
+router.post('/notify', notifyPayment);
+
+// Route protégée pour vérifier le statut de l'abonnement
+router.get('/statut', verifierToken, verifierStatutPaiement);
 
 module.exports = router;

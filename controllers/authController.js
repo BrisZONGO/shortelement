@@ -1,61 +1,56 @@
 const User = require('../models/User');
 const jwt = require('jsonwebtoken');
-const { SECRET_KEY } = require('../middleware/auth');
+const bcrypt = require('bcryptjs');
+
+const SECRET_KEY = process.env.JWT_SECRET || 'votre_cle_secrete_tres_longue_et_complexe_123456789';
 
 // Inscription
 const inscription = async (req, res) => {
   try {
-    const { nom, prenom, email, password, role } = req.body;
+    const { nom, prenom, email, password } = req.body;
     
-    if (!nom || !email || !password) {
-      return res.status(400).json({ 
-        success: false,
-        message: 'Les champs nom, email et mot de passe sont requis' 
-      });
+    // Vérifier si l'utilisateur existe déjà
+    const existingUser = await User.findOne({ email });
+    if (existingUser) {
+      return res.status(400).json({ message: "Cet email est déjà utilisé" });
     }
     
-    const userExistant = await User.findOne({ email });
-    if (userExistant) {
-      return res.status(400).json({ 
-        success: false,
-        message: 'Cet email est déjà utilisé' 
-      });
-    }
+    // Hasher le mot de passe
+    const hashedPassword = await bcrypt.hash(password, 10);
     
-    const user = new User({ 
-      nom, 
-      prenom: prenom || '',
-      email, 
-      password, 
-      role: role || 'user' 
+    // Créer l'utilisateur
+    const user = new User({
+      nom,
+      prenom,
+      email,
+      password: hashedPassword,
+      role: 'user'
     });
     
     await user.save();
     
+    // Créer le token
     const token = jwt.sign(
-      { userId: user._id, email: user.email, role: user.role }, 
-      SECRET_KEY, 
+      { userId: user._id, email: user.email, role: user.role },
+      SECRET_KEY,
       { expiresIn: '7d' }
     );
     
-    res.status(201).json({ 
+    res.status(201).json({
       success: true,
-      token, 
-      user: { 
-        id: user._id, 
-        nom: user.nom, 
+      token,
+      user: {
+        id: user._id,
+        nom: user.nom,
         prenom: user.prenom,
-        email: user.email, 
-        role: user.role 
-      } 
+        email: user.email,
+        role: user.role
+      }
     });
+    
   } catch (error) {
-    console.error('Erreur inscription:', error);
-    res.status(500).json({ 
-      success: false,
-      message: 'Erreur serveur', 
-      error: error.message 
-    });
+    console.error(error);
+    res.status(500).json({ message: "Erreur serveur" });
   }
 };
 
@@ -64,73 +59,41 @@ const connexion = async (req, res) => {
   try {
     const { email, password } = req.body;
     
+    // Trouver l'utilisateur
     const user = await User.findOne({ email });
     if (!user) {
-      return res.status(401).json({ 
-        success: false,
-        message: 'Email ou mot de passe incorrect' 
-      });
+      return res.status(401).json({ message: "Email ou mot de passe incorrect" });
     }
     
-    const isValid = await user.comparePassword(password);
+    // Vérifier le mot de passe
+    const isValid = await bcrypt.compare(password, user.password);
     if (!isValid) {
-      return res.status(401).json({ 
-        success: false,
-        message: 'Email ou mot de passe incorrect' 
-      });
+      return res.status(401).json({ message: "Email ou mot de passe incorrect" });
     }
     
+    // Créer le token
     const token = jwt.sign(
-      { userId: user._id, email: user.email, role: user.role }, 
-      SECRET_KEY, 
+      { userId: user._id, email: user.email, role: user.role },
+      SECRET_KEY,
       { expiresIn: '7d' }
     );
     
-    res.json({ 
-      success: true,
-      token, 
-      user: { 
-        id: user._id, 
-        nom: user.nom, 
-        prenom: user.prenom,
-        email: user.email, 
-        role: user.role 
-      } 
-    });
-  } catch (error) {
-    res.status(500).json({ 
-      success: false,
-      message: 'Erreur serveur', 
-      error: error.message 
-    });
-  }
-};
-
-// Profil utilisateur
-const getProfile = async (req, res) => {
-  try {
     res.json({
       success: true,
-      message: "Profil utilisateur",
+      token,
       user: {
-        id: req.user._id,
-        nom: req.user.nom,
-        prenom: req.user.prenom,
-        email: req.user.email,
-        role: req.user.role
+        id: user._id,
+        nom: user.nom,
+        prenom: user.prenom,
+        email: user.email,
+        role: user.role
       }
     });
+    
   } catch (error) {
-    res.status(500).json({ 
-      success: false, 
-      message: error.message 
-    });
+    console.error(error);
+    res.status(500).json({ message: "Erreur serveur" });
   }
 };
 
-// ✅ EXPORTATION - RIEN APRÈS CECI
-module.exports = { 
-  inscription, 
-  connexion,
-  getProfile
-};
+module.exports = { inscription, connexion };

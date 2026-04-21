@@ -3,33 +3,53 @@ const mongoose = require('mongoose');
 const coursSchema = new mongoose.Schema({
   titre: {
     type: String,
-    required: true,
-    unique: true,
-    trim: true
+    required: true
   },
   description: {
     type: String,
     required: true
   },
-  duree: {
+  contenu: {
+    type: String,
+    default: ''
+  },
+  prix: {
     type: Number,
-    required: true
+    default: 0
+  },
+  estPremium: {
+    type: Boolean,
+    default: false
+  },
+  actif: {
+    type: Boolean,
+    default: true
+  },
+  image: {
+    type: String,
+    default: ''
+  },
+  duree: {
+    type: String,
+    default: ''
   },
   niveau: {
     type: String,
     enum: ['débutant', 'intermédiaire', 'avancé'],
     default: 'débutant'
   },
-  prix: {
-    type: Number,
-    default: 0
+  categorie: {
+    type: String,
+    default: 'général'
   },
-  createdBy: {
-    type: mongoose.Schema.Types.ObjectId,
-    ref: 'User'
+  createdAt: {
+    type: Date,
+    default: Date.now
+  },
+  updatedAt: {
+    type: Date,
+    default: Date.now
   }
-}, {
-  timestamps: true
 });
 
 module.exports = mongoose.model('Cours', coursSchema);

@@ -5,18 +5,32 @@ const {
   createCours,
   updateCours,
   deleteCours,
-  searchCours
+  searchCours,
+  getCoursPremium,
+  getCoursGratuits
 } = require('../controllers/coursController');
 const { verifierToken, verifierAdmin } = require('../middleware/auth');
+const checkAbonnement = require('../middleware/checkAbonnement');
 
 const router = express.Router();
 
-// Routes publiques
+// =============================
+// 📚 ROUTES PUBLIQUES (sans authentification)
+// =============================
 router.get('/', getAllCours);
 router.get('/recherche', searchCours);
+router.get('/gratuits', getCoursGratuits);
 router.get('/:id', getCoursById);
 
-// Routes protégées
+// =============================
+// 💎 ROUTES PREMIUM (avec abonnement)
+// =============================
+router.get('/premium/liste', verifierToken, checkAbonnement, getCoursPremium);
+router.get('/premium/:id', verifierToken, checkAbonnement, getCoursPremium);
+
+// =============================
+// 👑 ROUTES ADMIN (protection admin requise)
+// =============================
 router.post('/', verifierToken, verifierAdmin, createCours);
 router.put('/:id', verifierToken, verifierAdmin, updateCours);
 router.delete('/:id', verifierToken, verifierAdmin, deleteCours);

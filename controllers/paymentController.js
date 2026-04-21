@@ -9,7 +9,6 @@ const initPaiement = async (req, res) => {
   try {
     const { montant, email } = req.body;
 
-    // Validation
     if (!montant || !email) {
       return res.status(400).json({
         success: false,
@@ -17,7 +16,6 @@ const initPaiement = async (req, res) => {
       });
     }
 
-    // Simulation de paiement
     res.json({
       success: true,
       message: "Paiement initialisé",
@@ -29,7 +27,7 @@ const initPaiement = async (req, res) => {
       }
     });
   } catch (error) {
-    console.error("Erreur paiement:", error);
+    console.error("❌ Erreur paiement:", error);
     res.status(500).json({
       success: false,
       message: error.message || "Erreur serveur"
@@ -54,6 +52,7 @@ const confirmerPaiement = async (req, res) => {
       reference
     });
   } catch (error) {
+    console.error("❌ Erreur confirmation:", error);
     res.status(500).json({
       success: false,
       message: error.message
@@ -65,100 +64,180 @@ const confirmerPaiement = async (req, res) => {
 // 💳 INTÉGRATION CINETPAY (réelle)
 // =============================
 
-// Initier le paiement avec CinetPay
 const initPayment = async (req, res) => {
   try {
-    const { montant, email } = req.body;
+    const { montant, email, telephone, nom, prenom, coursId, coursNom } = req.body;
+
+    if (!montant || !email) {
+      return res.status(400).json({
+        success: false,
+        message: "Montant et email requis"
+      });
+    }
+
+    let user = await User.findOne({ email });
+    const userPhone = telephone || user?.phone;
+    const userNom = nom || user?.nom;
+    const userPrenom = prenom || user?.prenom;
+
+    const transactionId = Date.now().toString();
 
     const payload = {
       apikey: process.env.CINETPAY_API_KEY,
       site_id: process.env.CINETPAY_SITE_ID,
-      transaction_id: Date.now().toString(),
-      amount: montant,
+      transaction_id: transactionId,
+      amount: parseInt(montant),
       currency: "XOF",
-      description: "Abonnement plateforme concours",
+      description: coursNom || "Abonnement plateforme concours",
       customer_email: email,
-      return_url: "https://concours-directs-et-professionnels.netlify.app/success",
-      notify_url: "https://shortelement.onrender.com/api/payment/notify"
+      customer_name: `${userPrenom || ''} ${userNom || ''}`.trim(),
+      customer_phone: userPhone || "",
+      return_url: `${process.env.FRONTEND_URL || 'http://localhost:3000'}/paiement/succes`,
+      cancel_url: `${process.env.FRONTEND_URL || 'http://localhost:3000'}/paiement/annule`,
+      notify_url: `${process.env.API_URL || 'http://localhost:5000'}/api/payment/notify`,
+      metadata: {
+        coursId: coursId || "abonnement",
+        coursNom: coursNom || "Abonnement mensuel",
+        email: email,
+        telephone: userPhone
+      }
     };
+
+    console.log("📦 Initiation paiement CinetPay:", { email, montant, transactionId });
 
     const { data } = await axios.post(
       "https://api-checkout.cinetpay.com/v2/payment",
       payload,
-      { timeout: 8000 }
+      { timeout: 30000 }
     );
 
-    return res.json(data);
+    if (data && data.code === 201) {
+      return res.json({
+        success: true,
+        payment_url: data.data?.payment_url,
+        transaction_id: transactionId
+      });
+    } else {
+      throw new Error(data?.message || "Erreur d'initiation CinetPay");
+    }
+
   } catch (err) {
-    console.error("initPayment error:", err?.response?.data || err.message);
-    return res.status(500).json({ success: false, message: "Erreur paiement" });
+    console.error("❌ initPayment error:", err?.response?.data || err.message);
+    return res.status(500).json({ 
+      success: false, 
+      message: err?.response?.data?.message || "Erreur lors de l'initiation du paiement" 
+    });
   }
 };
 
-// Notification serveur (webhook) - CinetPay
+// =============================
+// 📢 NOTIFICATION SERVEUR (webhook) - CinetPay
+// =============================
 const notifyPayment = async (req, res) => {
   try {
-    console.log("📩 Notification paiement reçue:", req.body);
+    console.log("📩 Notification paiement reçue:", JSON.stringify(req.body, null, 2));
 
-    const { status, customer_email } = req.body;
+    const { status, customer_email, transaction_id, amount, metadata } = req.body;
 
-    // ✅ Paiement validé
+    // ✅ Paiement accepté
     if (status === "ACCEPTED") {
+      console.log(`✅ Paiement accepté pour ${customer_email} - Transaction: ${transaction_id}`);
+      
       const user = await User.findOne({ email: customer_email });
 
       if (user) {
-        // 🎯 Activer abonnement 30 jours
         const expiration = new Date();
         expiration.setDate(expiration.getDate() + 30);
 
         user.abonnement = {
           actif: true,
-          expiration,
+          expiration: expiration,
           dateDebut: new Date(),
-          forfait: "mensuel"
+          forfait: "mensuel",
+          derniereTransaction: transaction_id
         };
 
         await user.save();
-
         console.log("✅ Abonnement activé pour:", user.email);
 
-        // 📲 ENVOI WHATSAPP (si numéro de téléphone disponible)
-        if (user.phone) {
-          await sendWhatsApp(
-            user.phone,
-            `🎉 Bonjour ${user.nom || user.email},
+        // Envoi WhatsApp
+        const phoneNumber = user.phone || metadata?.telephone || "+226XXXXXXXX";
+        const whatsappMessage = `🎉 Paiement validé !
 
-Votre paiement est validé ✅
-Votre abonnement est actif pour 30 jours.
+Bonjour ${user.nom || user.email},
 
-Bonne préparation aux concours 🇧🇫📚`
-          );
-        }
+✅ Votre paiement de ${amount || 5000} FCFA a été validé.
+📚 Abonnement actif pour 30 jours.
+
+Merci pour votre confiance !`;
+
+        await sendWhatsApp(phoneNumber, whatsappMessage).catch(err => {
+          console.error("❌ Erreur envoi WhatsApp:", err.message);
+        });
+
       } else {
         console.log("❌ Utilisateur non trouvé:", customer_email);
       }
     }
+    
+    // ⚠️ Paiement refusé
+    else if (status === "REFUSED") {
+      console.log(`⚠️ Paiement refusé pour ${customer_email} - Transaction: ${transaction_id}`);
+    }
 
     return res.status(200).json({
       success: true,
-      message: "Notification traitée"
+      message: "Notification traitée avec succès"
     });
 
   } catch (error) {
     console.error("❌ Erreur notifyPayment:", error);
     return res.status(500).json({
       success: false,
-      message: "Erreur serveur"
+      message: "Erreur serveur lors du traitement de la notification"
     });
   }
 };
 
 // =============================
-// 📤 EXPORTATION DES FONCTIONS
+// 🔍 VÉRIFIER STATUT PAIEMENT
+// =============================
+const verifierStatutPaiement = async (req, res) => {
+  try {
+    const user = req.user;
+    
+    if (user && user.abonnement) {
+      const estActif = user.abonnement.actif && new Date(user.abonnement.expiration) > new Date();
+      
+      return res.json({
+        success: true,
+        status: estActif ? "active" : "expired",
+        abonnement: user.abonnement
+      });
+    }
+    
+    res.json({
+      success: true,
+      status: "inactive",
+      message: "Aucun abonnement actif trouvé"
+    });
+    
+  } catch (error) {
+    console.error("❌ Erreur vérification statut:", error);
+    res.status(500).json({
+      success: false,
+      message: error.message
+    });
+  }
+};
+
+// =============================
+// 📤 EXPORTATION
 // =============================
 module.exports = {
-  initPaiement,      // Simulation (pour tests)
-  confirmerPaiement, // Simulation (pour tests)
-  initPayment,       // CinetPay réel
-  notifyPayment      // Webhook CinetPay
+  initPaiement,
+  confirmerPaiement,
+  initPayment,
+  notifyPayment,
+  verifierStatutPaiement
 };
