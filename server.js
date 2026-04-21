@@ -16,24 +16,53 @@ const coursRoutes = require('./routes/coursRoutes');
 const paymentRoutes = require('./routes/paymentRoutes');
 const adminRoutes = require('./routes/adminRoutes');
 
-// ✅ IMPORT CORRECT DU CRON (depuis cronJobs.js)
-//const { startCronJobs } = require('./services/cronService');
+// ✅ IMPORT DU CRON
 const { startCronJobs } = require('./services/cronService');
 
 // =============================
-// 🔥 CORS (CORRIGÉ)
+// 🔥 CONFIGURATION CORS CORRIGÉE
 // =============================
+const allowedOrigins = [
+  'http://localhost:3000',
+  'http://localhost:3001',
+  'https://formation-concours.netlify.app',
+  'https://concours-directs-et-professionnels.netlify.app',
+  'https://shortelement.onrender.com'
+];
+
+// Middleware CORS principal
 app.use(cors({
-  origin: [
-    "http://localhost:3000",
-    "http://localhost:3001",
-    "https://concours-directs-et-professionnels.netlify.app",
-    "https://shortelement.onrender.com"
-  ],
-  credentials: true
+  origin: function(origin, callback) {
+    // Permettre les requêtes sans origin (Postman, apps mobile)
+    if (!origin) return callback(null, true);
+    
+    if (allowedOrigins.indexOf(origin) === -1) {
+      console.log(`❌ Origine bloquée par CORS: ${origin}`);
+      return callback(new Error('CORS policy violation'), false);
+    }
+    console.log(`✅ Origine autorisée: ${origin}`);
+    return callback(null, true);
+  },
+  credentials: true,
+  methods: ['GET', 'POST', 'PUT', 'DELETE', 'OPTIONS'],
+  allowedHeaders: ['Content-Type', 'Authorization', 'X-Requested-With']
 }));
 
-app.options("*", cors());
+// Middleware CORS supplémentaire pour les headers
+app.use((req, res, next) => {
+  const origin = req.headers.origin;
+  if (allowedOrigins.includes(origin)) {
+    res.header('Access-Control-Allow-Origin', origin);
+  }
+  res.header('Access-Control-Allow-Credentials', 'true');
+  res.header('Access-Control-Allow-Methods', 'GET, POST, PUT, DELETE, OPTIONS');
+  res.header('Access-Control-Allow-Headers', 'Origin, X-Requested-With, Content-Type, Accept, Authorization');
+  
+  if (req.method === 'OPTIONS') {
+    return res.sendStatus(200);
+  }
+  next();
+});
 
 // =============================
 // 📦 MIDDLEWARES
