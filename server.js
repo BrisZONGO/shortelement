@@ -15,6 +15,7 @@ const authRoutes = require('./routes/authRoutes');
 const coursRoutes = require('./routes/coursRoutes');
 const paymentRoutes = require('./routes/paymentRoutes');
 const adminRoutes = require('./routes/adminRoutes');
+const partieRoutes = require('./routes/partieRoutes');
 
 // ✅ IMPORT DU CRON
 const { startCronJobs } = require('./services/cronService');
@@ -86,7 +87,8 @@ app.get('/', (req, res) => {
       auth: "/api/auth",
       cours: "/api/cours",
       payment: "/api/payment",
-      admin: "/api/admin"
+      admin: "/api/admin",
+      parties: "/api/parties"
     }
   });
 });
@@ -107,6 +109,7 @@ app.use('/api/auth', authRoutes);
 app.use('/api/cours', coursRoutes);
 app.use('/api/payment', paymentRoutes);
 app.use('/api/admin', adminRoutes);
+app.use('/api/parties', partieRoutes);
 
 // =============================
 // ❌ 404 - Route non trouvée
