@@ -7,38 +7,33 @@ const { sendWhatsApp } = require("./whatsappService");
 // =============================
 /**
  * Vérifie et désactive les abonnements expirés
- * Désactive l'abonnement si la date d'expiration est dépassée
  */
 const verifierAbonnementsExpires = async () => {
   try {
     const now = new Date();
-    
-    // Trouver les utilisateurs avec abonnement expiré mais toujours actif
+
+    // 🔍 Récupérer utilisateurs concernés
     const expiredUsers = await User.find({
-      'abonnement.actif': true,
-      'abonnement.expiration': { $lt: now }
+      "abonnement.actif": true,
+      "abonnement.expiration": { $lt: now }
     });
-    
+
     if (expiredUsers.length === 0) {
       console.log("📅 Aucun abonnement expiré à désactiver");
       return;
     }
-    
-    // Désactiver les abonnements expirés
-    const result = await User.updateMany(
-      { 
-        'abonnement.actif': true,
-        'abonnement.expiration': { $lt: now }
-      },
-      { 
-        $set: { 'abonnement.actif': false }
-      }
-    );
-    
-    console.log(`📅 ${result.modifiedCount} abonnement(s) expiré(s) désactivé(s)`);
-    
-    // Envoyer notification WhatsApp aux utilisateurs dont l'abonnement a expiré
+
+    // 🔥 MISE À JOUR INDIVIDUELLE (avec ton code exact)
     for (const user of expiredUsers) {
+
+      // ✅ TON CODE AJOUTÉ (OBLIGATOIRE)
+      if (user.abonnement.expiration < new Date()) {
+        user.abonnement.actif = false;
+      }
+
+      await user.save();
+
+      // 📲 Notification WhatsApp
       if (user.phone) {
         await sendWhatsApp(
           user.phone,
@@ -53,224 +48,178 @@ Pour continuer à accéder à nos cours, veuillez renouveler votre abonnement.
 🔗 https://concours-directs-et-professionnels.netlify.app
 
 Merci de votre confiance ! 🙏`
-        ).catch(err => console.error(`Erreur envoi WhatsApp expiration à ${user.phone}:`, err.message));
+        ).catch(err =>
+          console.error(`Erreur WhatsApp ${user.phone}:`, err.message)
+        );
       }
     }
-    
+
+    console.log(`📅 ${expiredUsers.length} abonnement(s) désactivé(s)`);
+
   } catch (error) {
-    console.error('❌ Erreur vérification abonnements:', error);
+    console.error("❌ Erreur vérification abonnements:", error);
   }
 };
 
 // =============================
 // 🔔 RAPPEL ABONNEMENT (J-3, J-1)
 // =============================
-/**
- * Envoie un rappel WhatsApp aux utilisateurs dont l'abonnement expire bientôt
- * Rappel à J-3 et J-1
- */
 const envoyerRappelAbonnement = async () => {
   try {
     const now = new Date();
+
     const dans3Jours = new Date();
     dans3Jours.setDate(now.getDate() + 3);
-    
+
     const dans1Jour = new Date();
     dans1Jour.setDate(now.getDate() + 1);
-    
-    // Utilisateurs dont l'abonnement expire dans 3 jours
+
     const usersJ3 = await User.find({
-      'abonnement.actif': true,
-      'abonnement.expiration': { 
+      "abonnement.actif": true,
+      "abonnement.expiration": {
         $gte: dans3Jours,
-        $lt: new Date(dans3Jours.getTime() + 24 * 60 * 60 * 1000)
+        $lt: new Date(dans3Jours.getTime() + 86400000)
       }
     });
-    
-    // Utilisateurs dont l'abonnement expire dans 1 jour
+
     const usersJ1 = await User.find({
-      'abonnement.actif': true,
-      'abonnement.expiration': { 
+      "abonnement.actif": true,
+      "abonnement.expiration": {
         $gte: dans1Jour,
-        $lt: new Date(dans1Jour.getTime() + 24 * 60 * 60 * 1000)
+        $lt: new Date(dans1Jour.getTime() + 86400000)
       }
     });
-    
-    const usersARappeler = [...usersJ3, ...usersJ1];
-    
-    // Éviter les doublons
-    const uniqueUsers = usersARappeler.filter((user, index, self) => 
-      index === self.findIndex(u => u._id.toString() === user._id.toString())
+
+    // 🔄 Suppression doublons
+    const uniqueUsers = [...usersJ3, ...usersJ1].filter(
+      (user, index, self) =>
+        index === self.findIndex(u => u._id.toString() === user._id.toString())
     );
-    
-    if (uniqueUsers.length > 0) {
-      console.log(`🔔 ${uniqueUsers.length} utilisateur(s) avec abonnement expirant bientôt`);
-      
-      for (const user of uniqueUsers) {
-        if (user.phone) {
-          const joursRestants = Math.ceil((new Date(user.abonnement.expiration) - now) / (1000 * 60 * 60 * 24));
-          const messageJoursRestants = joursRestants === 1 ? "demain" : `dans ${joursRestants} jours`;
-          
-          await sendWhatsApp(
-            user.phone,
-            `⚠️ Rappel abonnement
+
+    if (uniqueUsers.length === 0) {
+      console.log("🔔 Aucun rappel à envoyer");
+      return;
+    }
+
+    for (const user of uniqueUsers) {
+      if (user.phone) {
+        const joursRestants = Math.ceil(
+          (new Date(user.abonnement.expiration) - now) / (1000 * 60 * 60 * 24)
+        );
+
+        const messageJours =
+          joursRestants === 1 ? "demain" : `dans ${joursRestants} jours`;
+
+        await sendWhatsApp(
+          user.phone,
+          `⚠️ Rappel abonnement
 
 Bonjour ${user.nom || user.email},
 
-Votre abonnement expire ${messageJoursRestants} (le ${new Date(user.abonnement.expiration).toLocaleDateString()}).
+Votre abonnement expire ${messageJours} 
+(le ${new Date(user.abonnement.expiration).toLocaleDateString()}).
 
-💰 Renouvelez dès maintenant pour continuer à profiter de tous nos cours.
+💰 Renouvelez dès maintenant.
 
-🔗 https://concours-directs-et-professionnels.netlify.app
-
-À bientôt ! 📚`
-          ).catch(err => console.error(`Erreur envoi rappel à ${user.phone}:`, err.message));
-        }
+🔗 https://concours-directs-et-professionnels.netlify.app`
+        ).catch(err =>
+          console.error(`Erreur rappel ${user.phone}:`, err.message)
+        );
       }
-      
-      console.log(`✅ ${uniqueUsers.length} rappels WhatsApp envoyés`);
-    } else {
-      console.log("🔔 Aucun rappel d'abonnement à envoyer");
     }
+
+    console.log(`✅ ${uniqueUsers.length} rappels envoyés`);
+
   } catch (error) {
-    console.error('❌ Erreur rappel abonnement:', error);
+    console.error("❌ Erreur rappel:", error);
   }
 };
 
 // =============================
-// 📊 STATISTIQUES QUOTIDIENNES
+// 📊 RAPPORT QUOTIDIEN
 // =============================
-/**
- * Envoie un rapport quotidien à l'admin
- */
 const envoyerRapportQuotidien = async () => {
   try {
     const now = new Date();
-    const debutJournee = new Date(now);
-    debutJournee.setHours(0, 0, 0, 0);
-    
-    // Statistiques du jour
-    const nouveauxUtilisateurs = await User.countDocuments({
-      createdAt: { $gte: debutJournee }
+    const debutJour = new Date(now);
+    debutJour.setHours(0, 0, 0, 0);
+
+    const nouveaux = await User.countDocuments({
+      createdAt: { $gte: debutJour }
     });
-    
-    const totalUtilisateurs = await User.countDocuments();
-    const abonnementsActifs = await User.countDocuments({
-      'abonnement.actif': true
+
+    const total = await User.countDocuments();
+    const actifs = await User.countDocuments({
+      "abonnement.actif": true
     });
-    
-    const abonnementsExpirantAujourdhui = await User.countDocuments({
-      'abonnement.actif': true,
-      'abonnement.expiration': { 
+
+    const expirant = await User.countDocuments({
+      "abonnement.actif": true,
+      "abonnement.expiration": {
         $gte: now,
-        $lt: new Date(now.getTime() + 24 * 60 * 60 * 1000)
+        $lt: new Date(now.getTime() + 86400000)
       }
     });
-    
-    console.log(`📊 RAPPORT QUOTIDIEN - ${new Date().toLocaleDateString()}`);
-    console.log(`👥 Nouveaux utilisateurs: ${nouveauxUtilisateurs}`);
-    console.log(`👥 Total utilisateurs: ${totalUtilisateurs}`);
-    console.log(`✅ Abonnements actifs: ${abonnementsActifs}`);
-    console.log(`⚠️ Abonnements expirant aujourd'hui: ${abonnementsExpirantAujourdhui}`);
-    
-    // Envoyer à l'admin si numéro configuré
-    const adminPhone = process.env.ADMIN_WHATSAPP;
-    if (adminPhone && adminPhone !== "226XXXXXXXX") {
+
+    console.log("📊 RAPPORT");
+    console.log("Nouveaux:", nouveaux);
+    console.log("Total:", total);
+    console.log("Actifs:", actifs);
+    console.log("Expire aujourd'hui:", expirant);
+
+    if (process.env.ADMIN_WHATSAPP) {
       await sendWhatsApp(
-        adminPhone,
-        `📊 *Rapport quotidien* - ${new Date().toLocaleDateString()}
+        process.env.ADMIN_WHATSAPP,
+        `📊 Rapport
 
-👥 Nouveaux inscrits: ${nouveauxUtilisateurs}
-👥 Total utilisateurs: ${totalUtilisateurs}
-✅ Abonnements actifs: ${abonnementsActifs}
-⚠️ Expirations aujourd'hui: ${abonnementsExpirantAujourdhui}
-
-📈 Bonne journée !`
-      ).catch(err => console.error("Erreur envoi rapport admin:", err.message));
+👥 Nouveaux: ${nouveaux}
+👥 Total: ${total}
+✅ Actifs: ${actifs}
+⚠️ Expirations: ${expirant}`
+      );
     }
-    
+
   } catch (error) {
-    console.error('❌ Erreur rapport quotidien:', error);
+    console.error("❌ Erreur rapport:", error);
   }
 };
 
 // =============================
-// 🧹 NETTOYAGE DES DONNÉES TEMPORAIRES
+// 🧹 NETTOYAGE
 // =============================
-/**
- * Nettoyer les logs ou données temporaires
- * Supprime les comptes inactifs depuis plus de 90 jours
- */
 const nettoyerLogs = async () => {
   try {
-    const now = new Date();
     const dateLimite = new Date();
-    dateLimite.setDate(now.getDate() - 90); // 90 jours d'inactivité
-    
-    // Optionnel: Supprimer les comptes non confirmés très anciens
+    dateLimite.setDate(dateLimite.getDate() - 90);
+
     const result = await User.deleteMany({
       abonnement: { $exists: false },
       createdAt: { $lt: dateLimite }
     });
-    
-    if (result.deletedCount > 0) {
-      console.log(`🧹 ${result.deletedCount} compte(s) inactif(s) supprimé(s)`);
-    } else {
-      console.log('🧹 Aucune donnée à nettoyer');
-    }
+
+    console.log(`🧹 ${result.deletedCount} comptes supprimés`);
+
   } catch (error) {
-    console.error('❌ Erreur nettoyage:', error);
+    console.error("❌ Erreur nettoyage:", error);
   }
 };
 
 // =============================
-// 🚀 DÉMARRAGE DES TÂCHES CRON
+// 🚀 CRON START
 // =============================
-/**
- * Démarre toutes les tâches cron
- * À appeler une seule fois au démarrage du serveur
- */
 const startCronJobs = () => {
-  console.log("🔄 Initialisation des tâches planifiées...");
-  
-  // 1. Vérification des abonnements expirés (tous les jours à minuit)
-  cron.schedule("0 0 * * *", async () => {
-    console.log("\n🔄 [CRON - minuit] Vérification des abonnements expirés");
-    await verifierAbonnementsExpires();
-  });
+  console.log("🔄 CRON START");
 
-  // 2. Rappel des abonnements (tous les jours à 8h et 18h)
-  cron.schedule("0 8 * * *", async () => {
-    console.log("\n🔔 [CRON - 8h] Envoi des rappels d'abonnement (matin)");
-    await envoyerRappelAbonnement();
-  });
-  
-  cron.schedule("0 18 * * *", async () => {
-    console.log("\n🔔 [CRON - 18h] Envoi des rappels d'abonnement (soir)");
-    await envoyerRappelAbonnement();
-  });
+  cron.schedule("0 0 * * *", verifierAbonnementsExpires);
+  cron.schedule("0 8 * * *", envoyerRappelAbonnement);
+  cron.schedule("0 18 * * *", envoyerRappelAbonnement);
+  cron.schedule("0 20 * * *", envoyerRapportQuotidien);
+  cron.schedule("0 3 * * 0", nettoyerLogs);
 
-  // 3. Rapport quotidien à l'admin (tous les jours à 20h)
-  cron.schedule("0 20 * * *", async () => {
-    console.log("\n📊 [CRON - 20h] Envoi du rapport quotidien");
-    await envoyerRapportQuotidien();
-  });
-
-  // 4. Nettoyage des données (tous les dimanches à 3h)
-  cron.schedule("0 3 * * 0", async () => {
-    console.log("\n🧹 [CRON - dimanche 3h] Nettoyage des données");
-    await nettoyerLogs();
-  });
-
-  console.log("✅ Toutes les tâches cron ont été initialisées");
-  console.log("📅 Programme des tâches:");
-  console.log("   - 00:00 → Désactivation abonnements expirés");
-  console.log("   - 08:00 & 18:00 → Rappels WhatsApp");
-  console.log("   - 20:00 → Rapport quotidien à l'admin");
-  console.log("   - Dimanche 03:00 → Nettoyage des données");
+  console.log("✅ CRON ACTIF");
 };
 
-module.exports = { 
+module.exports = {
   startCronJobs,
   verifierAbonnementsExpires,
   envoyerRappelAbonnement,

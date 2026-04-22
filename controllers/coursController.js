@@ -1,13 +1,14 @@
 const Cours = require('../models/Cours');
+const Progression = require("../models/Progression");
+const { isUnlocked } = require("../utils/unlock");
 
 // =============================
-// 📚 ROUTES PUBLIQUES
+// 📚 GET TOUS LES COURS
 // =============================
-
-// Récupérer tous les cours
 const getAllCours = async (req, res) => {
   try {
     const cours = await Cours.find().sort({ createdAt: -1 });
+
     res.json({
       success: true,
       count: cours.length,
@@ -19,14 +20,34 @@ const getAllCours = async (req, res) => {
   }
 };
 
-// Récupérer un cours par ID
+// =============================
+// 📘 GET COURS AVEC SEMAINES DÉBLOQUÉES
+// =============================
 const getCoursById = async (req, res) => {
   try {
     const cours = await Cours.findById(req.params.id);
+
     if (!cours) {
-      return res.status(404).json({ success: false, message: 'Cours non trouvé' });
+      return res.status(404).json({
+        success: false,
+        message: "Cours non trouvé"
+      });
     }
-    res.json({ success: true, cours });
+
+    // 🔥 LOGIQUE SEMAINE (unlock)
+    const semaines = cours.semaines?.map((week) => ({
+      ...week._doc,
+      unlocked: isUnlocked(week.weekIndex, cours.startDate)
+    })) || [];
+
+    res.json({
+      success: true,
+      cours: {
+        ...cours._doc,
+        semaines
+      }
+    });
+
   } catch (error) {
     console.error("❌ Erreur getCoursById:", error);
     res.status(500).json({ success: false, message: error.message });
@@ -34,22 +55,20 @@ const getCoursById = async (req, res) => {
 };
 
 // =============================
-// 💎 COURS PREMIUM (avec abonnement)
+// 💎 COURS PREMIUM
 // =============================
-
-// Récupérer tous les cours premium (nécessite abonnement)
 const getCoursPremium = async (req, res) => {
   try {
-    const coursPremium = await Cours.find({ 
+    const coursPremium = await Cours.find({
       estPremium: true,
-      actif: true 
+      actif: true
     }).sort({ createdAt: -1 });
-    
+
     res.json({
       success: true,
       count: coursPremium.length,
       cours: coursPremium,
-      abonnement: req.abonnement // Infos d'abonnement du middleware
+      abonnement: req.abonnement
     });
   } catch (error) {
     console.error("❌ Erreur getCoursPremium:", error);
@@ -60,14 +79,16 @@ const getCoursPremium = async (req, res) => {
   }
 };
 
-// Récupérer tous les cours gratuits
+// =============================
+// 🆓 COURS GRATUITS
+// =============================
 const getCoursGratuits = async (req, res) => {
   try {
-    const coursGratuits = await Cours.find({ 
+    const coursGratuits = await Cours.find({
       estPremium: false,
-      actif: true 
+      actif: true
     }).sort({ createdAt: -1 });
-    
+
     res.json({
       success: true,
       count: coursGratuits.length,
@@ -83,106 +104,107 @@ const getCoursGratuits = async (req, res) => {
 };
 
 // =============================
-// 👑 ROUTES ADMIN
+// 👑 CREATE COURS
 // =============================
-
-// Créer un cours
 const createCours = async (req, res) => {
   try {
-    const { titre, description, duree, niveau, prix, estPremium, image, categorie } = req.body;
-    
-    // Validation des champs requis
-    if (!titre || !description || !duree) {
-      return res.status(400).json({
-        success: false,
-        message: 'Les champs titre, description et duree sont requis'
-      });
-    }
-    
-    const nouveauCours = new Cours({
+    const {
       titre,
       description,
       duree,
-      niveau: niveau || 'débutant',
-      prix: prix || 0,
-      estPremium: estPremium || false,
-      image: image || '',
-      categorie: categorie || 'général',
-      createdBy: req.userId
-    });
-    
-    const coursSaved = await nouveauCours.save();
-    res.status(201).json({ 
-      success: true, 
-      message: 'Cours créé avec succès', 
-      cours: coursSaved 
-    });
-  } catch (error) {
-    if (error.code === 11000) {
-      return res.status(400).json({ 
-        success: false, 
-        message: 'Un cours avec ce titre existe déjà' 
+      niveau,
+      prix,
+      estPremium,
+      image,
+      categorie,
+      semaines,
+      startDate
+    } = req.body;
+
+    if (!titre || !description || !duree) {
+      return res.status(400).json({
+        success: false,
+        message: "Champs obligatoires manquants"
       });
     }
+
+    const cours = new Cours({
+      titre,
+      description,
+      duree,
+      niveau: niveau || "débutant",
+      prix: prix || 0,
+      estPremium: estPremium || false,
+      image,
+      categorie,
+      semaines: semaines || [],
+      startDate: startDate || new Date(),
+      createdBy: req.userId
+    });
+
+    await cours.save();
+
+    res.status(201).json({
+      success: true,
+      message: "Cours créé",
+      cours
+    });
+
+  } catch (error) {
     console.error("❌ Erreur createCours:", error);
     res.status(500).json({ success: false, message: error.message });
   }
 };
 
-// Mettre à jour un cours
+// =============================
+// ✏️ UPDATE COURS
+// =============================
 const updateCours = async (req, res) => {
   try {
-    const { titre, description, duree, niveau, prix, estPremium, image, actif, categorie } = req.body;
-    
     const cours = await Cours.findByIdAndUpdate(
       req.params.id,
-      { 
-        titre, 
-        description, 
-        duree, 
-        niveau, 
-        prix,
-        estPremium,
-        image,
-        actif,
-        categorie,
-        updatedAt: Date.now()
-      },
+      { ...req.body, updatedAt: Date.now() },
       { new: true, runValidators: true }
     );
-    
+
     if (!cours) {
-      return res.status(404).json({ success: false, message: 'Cours non trouvé' });
-    }
-    
-    res.json({ 
-      success: true, 
-      message: 'Cours mis à jour avec succès', 
-      cours 
-    });
-  } catch (error) {
-    if (error.code === 11000) {
-      return res.status(400).json({ 
-        success: false, 
-        message: 'Un autre cours avec ce titre existe déjà' 
+      return res.status(404).json({
+        success: false,
+        message: "Cours non trouvé"
       });
     }
+
+    res.json({
+      success: true,
+      message: "Cours mis à jour",
+      cours
+    });
+
+  } catch (error) {
     console.error("❌ Erreur updateCours:", error);
     res.status(500).json({ success: false, message: error.message });
   }
 };
 
-// Supprimer un cours
+// =============================
+// 🗑️ DELETE COURS
+// =============================
 const deleteCours = async (req, res) => {
   try {
     const cours = await Cours.findByIdAndDelete(req.params.id);
+
     if (!cours) {
-      return res.status(404).json({ success: false, message: 'Cours non trouvé' });
+      return res.status(404).json({
+        success: false,
+        message: "Cours non trouvé"
+      });
     }
-    res.json({ 
-      success: true, 
-      message: 'Cours supprimé avec succès' 
+
+    res.json({
+      success: true,
+      message: "Cours supprimé"
     });
+
   } catch (error) {
     console.error("❌ Erreur deleteCours:", error);
     res.status(500).json({ success: false, message: error.message });
@@ -190,53 +212,24 @@ const deleteCours = async (req, res) => {
 };
 
 // =============================
-// 🔍 RECHERCHE AVANCÉE
+// 🔍 SEARCH
 // =============================
-
-// Recherche avancée de cours
 const searchCours = async (req, res) => {
   try {
-    const { q, niveau, prixMin, prixMax, categorie, estPremium } = req.query;
-    
-    let query = {};
-    
-    // Recherche par mot-clé dans titre ou description
-    if (q) {
-      query.$or = [
+    const { q } = req.query;
+
+    const cours = await Cours.find({
+      $or: [
         { titre: { $regex: q, $options: 'i' } },
         { description: { $regex: q, $options: 'i' } }
-      ];
-    }
-    
-    // Filtre par niveau
-    if (niveau) query.niveau = niveau;
-    
-    // Filtre par catégorie
-    if (categorie) query.categorie = categorie;
-    
-    // Filtre par type (premium/gratuit)
-    if (estPremium !== undefined) {
-      query.estPremium = estPremium === 'true';
-    }
-    
-    // Filtre par prix
-    if (prixMin || prixMax) {
-      query.prix = {};
-      if (prixMin) query.prix.$gte = parseInt(prixMin);
-      if (prixMax) query.prix.$lte = parseInt(prixMax);
-    }
-    
-    // Filtre par actif (par défaut uniquement actifs)
-    query.actif = true;
-    
-    const cours = await Cours.find(query).sort({ createdAt: -1 });
-    
+      ]
+    });
+
     res.json({
       success: true,
-      count: cours.length,
-      cours,
-      searchParams: { q, niveau, prixMin, prixMax, categorie, estPremium }
+      cours
     });
+
   } catch (error) {
     console.error("❌ Erreur searchCours:", error);
     res.status(500).json({ success: false, message: error.message });
@@ -244,46 +237,51 @@ const searchCours = async (req, res) => {
 };
 
 // =============================
-// 📊 STATISTIQUES (pour admin)
+// 🧠 QCM (P8)
 // =============================
-
-// Statistiques des cours
-const getCoursStats = async (req, res) => {
+const submitQCM = async (req, res) => {
   try {
-    const totalCours = await Cours.countDocuments();
-    const totalPremium = await Cours.countDocuments({ estPremium: true });
-    const totalGratuits = await Cours.countDocuments({ estPremium: false });
-    const totalActifs = await Cours.countDocuments({ actif: true });
-    
-    // Par niveau
-    const parNiveau = await Cours.aggregate([
-      { $group: { _id: '$niveau', count: { $sum: 1 } } }
-    ]);
-    
-    // Par catégorie
-    const parCategorie = await Cours.aggregate([
-      { $group: { _id: '$categorie', count: { $sum: 1 } } }
-    ]);
-    
+    const { coursId, semaineIndex, partieIndex, score } = req.body;
+    const userId = req.user.id;
+
+    let progression = await Progression.findOne({
+      userId,
+      coursId,
+      semaineIndex,
+      partieIndex
+    });
+
+    if (!progression) {
+      progression = new Progression({
+        userId,
+        coursId,
+        semaineIndex,
+        partieIndex
+      });
+    }
+
+    progression.score = score;
+    progression.tentatives += 1;
+
+    // 🔥 VALIDATION
+    progression.validated = score >= 80;
+
+    await progression.save();
+
     res.json({
       success: true,
-      stats: {
-        total: totalCours,
-        premium: totalPremium,
-        gratuits: totalGratuits,
-        actifs: totalActifs,
-        parNiveau,
-        parCategorie
-      }
+      validated: progression.validated,
+      tentatives: progression.tentatives
     });
+
   } catch (error) {
-    console.error("❌ Erreur getCoursStats:", error);
+    console.error("❌ Erreur submitQCM:", error);
     res.status(500).json({ success: false, message: error.message });
   }
 };
 
 // =============================
-// 📤 EXPORTATION
+// 📤 EXPORT
 // =============================
 module.exports = {
   getAllCours,
@@ -294,5 +292,5 @@ module.exports = {
   updateCours,
   deleteCours,
   searchCours,
-  getCoursStats
+  submitQCM
 };

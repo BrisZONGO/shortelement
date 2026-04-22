@@ -1,55 +1,48 @@
-const mongoose = require('mongoose');
+const mongoose = require("mongoose");
 
-const coursSchema = new mongoose.Schema({
-  titre: {
-    type: String,
-    required: true
-  },
-  description: {
-    type: String,
-    required: true
-  },
-  contenu: {
-    type: String,
-    default: ''
-  },
-  prix: {
-    type: Number,
-    default: 0
-  },
-  estPremium: {
-    type: Boolean,
-    default: false
-  },
-  actif: {
-    type: Boolean,
-    default: true
-  },
-  image: {
-    type: String,
-    default: ''
-  },
-  duree: {
-    type: String,
-    default: ''
-  },
-  niveau: {
-    type: String,
-    enum: ['débutant', 'intermédiaire', 'avancé'],
-    default: 'débutant'
-  },
-  categorie: {
-    type: String,
-    default: 'général'
-  },
-  createdAt: {
-    type: Date,
-    default: Date.now
-  },
-  updatedAt: {
-    type: Date,
-    default: Date.now
-  }
+// ======================
+// QCM (P7)
+// ======================
+const questionSchema = new mongoose.Schema({
+  question: String,
+  choix: [String],
+  bonneReponse: String,
+  commentaire: String
 });
 
-module.exports = mongoose.model('Cours', coursSchema);
+// ======================
+// PARTIE (P6)
+// ======================
+const partieSchema = new mongoose.Schema({
+  titre: String,
+  questions: [questionSchema]
+});
+
+// ======================
+// SEMAINE (P5)
+// ======================
+const semaineSchema = new mongoose.Schema({
+  titre: String,
+  weekIndex: Number,
+  parties: [partieSchema]
+});
+
+// ======================
+// COURS
+// ======================
+const coursSchema = new mongoose.Schema({
+  titre: String,
+  description: String,
+  image: String,
+  estPremium: Boolean,
+  prix: Number,
+  startDate: Date,
+
+  // 🔥 P3 (année dynamique)
+  anneeLabel: String, // ex: 2025-2026
+
+  semaines: [semaineSchema]
+
+}, { timestamps: true });
+
+module.exports = mongoose.model("Cours", coursSchema);
