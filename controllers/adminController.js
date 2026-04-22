@@ -8,31 +8,49 @@ const Cours = require("../models/Cours");
 const getStats = async (req, res) => {
   try {
     // =============================
-    // 👥 USERS
+    // 👥 USERS STATISTICS
     // =============================
     const totalUsers = await User.countDocuments();
-
     const premiumUsers = await User.countDocuments({
       "abonnement.actif": true
     });
-
     const adminUsers = await User.countDocuments({
       role: "admin"
     });
+    const regularUsers = await User.countDocuments({
+      role: "user"
+    });
+    
+    // Abonnements actifs avec expiration future
+    const abonnementsActifs = await User.countDocuments({ 
+      'abonnement.actif': true,
+      'abonnement.expiration': { $gt: new Date() }
+    });
 
     // =============================
-    // 📚 COURS
+    // 📚 COURS STATISTICS
     // =============================
     const totalCourses = await Cours.countDocuments();
+    const premiumCourses = await Cours.countDocuments({ estPremium: true });
+    const freeCourses = await Cours.countDocuments({ estPremium: false });
 
     // =============================
-    // 💰 REVENUS
+    // 💰 REVENUS CALCULATION
     // =============================
-    const prixAbonnement = 5000; // FCFA
+    const prixAbonnement = 5000; // FCFA par abonnement
     const revenus = premiumUsers * prixAbonnement;
+    
+    // Ventes du mois
+    const debutMois = new Date();
+    debutMois.setDate(1);
+    debutMois.setHours(0, 0, 0, 0);
+    
+    const ventesMois = await User.countDocuments({ 
+      'abonnement.dateDebut': { $gte: debutMois }
+    }) * prixAbonnement;
 
     // =============================
-    // 🆕 RÉCENTS
+    // 🆕 DONNÉES RÉCENTES
     // =============================
     const recentUsers = await User.find()
       .sort({ createdAt: -1 })
@@ -44,31 +62,52 @@ const getStats = async (req, res) => {
       .limit(5);
 
     // =============================
-    // ✅ RÉPONSE (FUSION PROPRE)
+    // 📈 STATS PAR MOIS
+    // =============================
+    const usersByMonth = await User.aggregate([
+      {
+        $group: {
+          _id: { $month: '$createdAt' },
+          count: { $sum: 1 }
+        }
+      },
+      { $sort: { _id: 1 } }
+    ]);
+
+    // =============================
+    // ✅ RÉPONSE COMPLÈTE
     // =============================
     res.json({
       success: true,
 
-      // 👉 IMPORTANT : pour ton frontend
+      // 👉 Pour compatibilité frontend existant
       totalUsers,
       premiumUsers,
       revenus,
 
-      // 👉 stats détaillées
+      // 👉 Stats détaillées
       stats: {
         totalUsers,
         premiumUsers,
         adminUsers,
+        regularUsers,
+        abonnementsActifs,
         totalCourses,
+        premiumCourses,
+        freeCourses,
         revenus,
+        ventesMois,
         prixAbonnement
       },
 
-      // 👉 données récentes
+      // 👉 Données récentes
       recent: {
         users: recentUsers,
         courses: recentCourses
-      }
+      },
+
+      // 👉 Statistiques temporelles
+      usersByMonth
     });
 
   } catch (err) {
@@ -84,6 +123,7 @@ const getStats = async (req, res) => {
 
 /**
  * 👥 GET /api/admin/users
+ * Récupérer tous les utilisateurs
  */
 const getAllUsers = async (req, res) => {
   try {
@@ -109,6 +149,7 @@ const getAllUsers = async (req, res) => {
 
 /**
  * 🔁 PUT /api/admin/users/:userId/role
+ * Mettre à jour le rôle d'un utilisateur
  */
 const updateUserRole = async (req, res) => {
   try {
@@ -118,14 +159,14 @@ const updateUserRole = async (req, res) => {
     if (!["user", "admin"].includes(role)) {
       return res.status(400).json({
         success: false,
-        message: "Rôle invalide"
+        message: "Rôle invalide. Les rôles acceptés sont: user, admin"
       });
     }
 
     const user = await User.findByIdAndUpdate(
       userId,
       { role },
-      { new: true }
+      { new: true, runValidators: true }
     ).select("-password");
 
     if (!user) {
@@ -135,10 +176,18 @@ const updateUserRole = async (req, res) => {
       });
     }
 
+    console.log(`✅ Rôle de ${user.email} mis à jour: ${role}`);
+
     res.json({
       success: true,
       message: `Rôle modifié en ${role}`,
-      user
+      user: {
+        id: user._id,
+        email: user.email,
+        nom: user.nom,
+        prenom: user.prenom,
+        role: user.role
+      }
     });
 
   } catch (err) {
@@ -151,8 +200,101 @@ const updateUserRole = async (req, res) => {
   }
 };
 
+/**
+ * 🗑️ DELETE /api/admin/users/:userId
+ * Supprimer un utilisateur
+ */
+const deleteUser = async (req, res) => {
+  try {
+    const { userId } = req.params;
+    
+    // Vérifier si l'utilisateur existe
+    const user = await User.findById(userId);
+    if (!user) {
+      return res.status(404).json({
+        success: false,
+        message: "Utilisateur non trouvé"
+      });
+    }
+    
+    // Empêcher la suppression de son propre compte
+    if (userId === req.userId) {
+      return res.status(400).json({
+        success: false,
+        message: "Vous ne pouvez pas supprimer votre propre compte"
+      });
+    }
+    
+    await User.findByIdAndDelete(userId);
+    
+    console.log(`✅ Utilisateur supprimé: ${user.email}`);
+    
+    res.json({
+      success: true,
+      message: `Utilisateur ${user.email} supprimé avec succès`,
+      deletedUser: {
+        id: user._id,
+        email: user.email,
+        nom: user.nom,
+        prenom: user.prenom
+      }
+    });
+    
+  } catch (err) {
+    console.error("❌ Erreur deleteUser:", err);
+    res.status(500).json({
+      success: false,
+      message: err.message
+    });
+  }
+};
+
+/**
+ * 📊 GET /api/admin/abonnements/stats
+ * Statistiques des abonnements
+ */
+const getAbonnementsStats = async (req, res) => {
+  try {
+    const actifs = await User.countDocuments({ 
+      'abonnement.actif': true,
+      'abonnement.expiration': { $gt: new Date() }
+    });
+    
+    const expires = await User.countDocuments({ 
+      'abonnement.actif': false,
+      'abonnement.expiration': { $lt: new Date() }
+    });
+    
+    const sansAbonnement = await User.countDocuments({ 
+      $or: [
+        { 'abonnement': { $exists: false } },
+        { 'abonnement.actif': false, 'abonnement.expiration': { $exists: false } }
+      ]
+    });
+    
+    res.json({
+      success: true,
+      stats: {
+        actifs,
+        expires,
+        sansAbonnement,
+        total: actifs + expires + sansAbonnement
+      }
+    });
+    
+  } catch (err) {
+    console.error("❌ Erreur getAbonnementsStats:", err);
+    res.status(500).json({
+      success: false,
+      message: err.message
+    });
+  }
+};
+
 module.exports = {
   getStats,
   getAllUsers,
-  updateUserRole
+  updateUserRole,
+  deleteUser,
+  getAbonnementsStats
 };
