@@ -14,20 +14,6 @@ const moduleSchema = new mongoose.Schema({
     type: String,
     default: ''
   },
-  numeroSemaine: {
-    type: Number,
-    required: true,
-    min: 1,
-    max: 52
-  },
-  dateActivation: {
-    type: Date,
-    default: null
-  },
-  estActif: {
-    type: Boolean,
-    default: false
-  },
   ordre: {
     type: Number,
     default: 0
@@ -39,13 +25,16 @@ const moduleSchema = new mongoose.Schema({
   objectifs: [{
     type: String
   }],
+  actif: {
+    type: Boolean,
+    default: true
+  },
   createdAt: {
     type: Date,
     default: Date.now
   }
 });
 
-// Index pour trier par semaine
-moduleSchema.index({ coursId: 1, numeroSemaine: 1 });
+moduleSchema.index({ coursId: 1, ordre: 1 });
 
 module.exports = mongoose.model('Module', moduleSchema);
