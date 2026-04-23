@@ -22,14 +22,15 @@ const moduleRoutes = require('./routes/moduleRoutes');
 const { startCronJobs } = require('./services/cronService');
 
 // =============================
-// 🔥 CONFIGURATION CORS CORRIGÉE
+// 🔥 CONFIGURATION CORS CORRIGÉE (avec Vercel)
 // =============================
 const allowedOrigins = [
   'http://localhost:3000',
   'http://localhost:3001',
   'https://formation-concours.netlify.app',
   'https://concours-directs-et-professionnels.netlify.app',
-  'https://shortelement.onrender.com'
+  'https://shortelement.onrender.com',
+  'https://formation-concours.vercel.app'  // ✅ AJOUT DE VERCEL
 ];
 
 // Middleware CORS principal
