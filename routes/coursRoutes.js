@@ -1,4 +1,3 @@
-
 const express = require('express');
 const router = express.Router();
 const { verifierToken, verifierAdmin } = require('../middleware/auth');
