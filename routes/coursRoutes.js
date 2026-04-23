@@ -1,4 +1,4 @@
-cat > ~/Desktop/backend-concours/routes/coursRoutes.js << 'EOF'
+
 const express = require('express');
 const router = express.Router();
 const { verifierToken, verifierAdmin } = require('../middleware/auth');
@@ -71,4 +71,3 @@ router.put('/:id', verifierToken, verifierAdmin, updateCours);
 router.delete('/:id', verifierToken, verifierAdmin, deleteCours);
 
 module.exports = router;
-EOF
