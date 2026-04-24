@@ -1,124 +1,140 @@
 const jwt = require('jsonwebtoken');
 const User = require('../models/User');
 
-// Clé secrète - Idéalement dans .env
+// =============================
+// 🔐 SECRET KEY
+// =============================
 const SECRET_KEY = process.env.JWT_SECRET || 'votre_cle_secrete_tres_longue_et_complexe_123456789';
 
 // =============================
-// 🔐 MIDDLEWARE PRINCIPAL
+// 🔐 MIDDLEWARE PRINCIPAL (PROTECT)
 // =============================
-const verifierToken = async (req, res, next) => {
-  const token = req.headers['authorization']?.split(' ')[1];
-  
-  if (!token) {
-    return res.status(401).json({ 
+const protect = async (req, res, next) => {
+  const authHeader = req.headers.authorization;
+
+  if (!authHeader || !authHeader.startsWith('Bearer')) {
+    return res.status(401).json({
       success: false,
-      message: 'Accès non autorisé - Token manquant' 
+      message: 'Accès non autorisé - Token manquant'
     });
   }
-  
+
+  const token = authHeader.split(' ')[1];
+
   try {
     const decoded = jwt.verify(token, SECRET_KEY);
-    
-    req.userId = decoded.userId;
-    req.userRole = decoded.role;
-    req.userEmail = decoded.email;
-    
-    const user = await User.findById(req.userId).select('-password');
+
+    // ⚠️ STANDARDISATION : on utilise id (PAS userId)
+    req.user = {
+      id: decoded.id,
+      role: decoded.role,
+      email: decoded.email || null
+    };
+
+    // Vérification user en base
+    const user = await User.findById(decoded.id).select('-password');
+
     if (!user) {
-      return res.status(401).json({ 
+      return res.status(401).json({
         success: false,
-        message: 'Utilisateur non trouvé' 
+        message: 'Utilisateur introuvable'
       });
     }
-    
-    req.user = user;
+
+    req.userData = user;
     next();
-    
+
   } catch (error) {
-    if (error.name === 'JsonWebTokenError') {
-      return res.status(401).json({ 
-        success: false,
-        message: 'Token invalide' 
-      });
-    }
+
     if (error.name === 'TokenExpiredError') {
-      return res.status(401).json({ 
+      return res.status(401).json({
         success: false,
-        message: 'Token expiré' 
+        message: 'Token expiré'
       });
     }
-    return res.status(401).json({ 
-      success: false,
-      message: 'Erreur d\'authentification' 
-    });
-  }
-};
 
-// =============================
-// 👑 MIDDLEWARE ADMIN
-// =============================
-const verifierAdmin = (req, res, next) => {
-  const userRole = req.userRole || req.user?.role;
-  
-  if (userRole !== 'admin') {
-    return res.status(403).json({ 
-      success: false,
-      message: 'Accès réservé aux administrateurs' 
-    });
-  }
-  next();
-};
-
-// =============================
-// 👤 MIDDLEWARE PROPRIÉTAIRE
-// =============================
-const verifierProprietaireOuAdmin = (req, res, next) => {
-  const userId = req.params.id || req.params.userId;
-  const currentUserId = req.userId || req.user?._id;
-  const userRole = req.userRole || req.user?.role;
-  
-  if (currentUserId === userId || userRole === 'admin') {
-    next();
-  } else {
-    return res.status(403).json({ 
-      success: false,
-      message: 'Accès non autorisé - Vous n\'êtes pas le propriétaire' 
-    });
-  }
-};
-
-// =============================
-// 🔓 MIDDLEWARE OPTIONNEL
-// =============================
-const verifierTokenOptionnel = async (req, res, next) => {
-  const token = req.headers['authorization']?.split(' ')[1];
-  
-  if (token) {
-    try {
-      const decoded = jwt.verify(token, SECRET_KEY);
-      req.userId = decoded.userId;
-      req.userRole = decoded.role;
-      req.userEmail = decoded.email;
-      
-      const user = await User.findById(req.userId).select('-password');
-      if (user) {
-        req.user = user;
-      }
-    } catch (error) {
-      // On ignore l'erreur
+    if (error.name === 'JsonWebTokenError') {
+      return res.status(401).json({
+        success: false,
+        message: 'Token invalide'
+      });
     }
+
+    return res.status(401).json({
+      success: false,
+      message: 'Erreur authentification'
+    });
   }
+};
+
+// =============================
+// 👑 ADMIN ONLY
+// =============================
+const isAdmin = (req, res, next) => {
+  const role = req.user?.role;
+
+  if (role !== 'admin') {
+    return res.status(403).json({
+      success: false,
+      message: 'Accès réservé aux administrateurs'
+    });
+  }
+
   next();
 };
 
 // =============================
-// 📤 EXPORTATION
+// 👤 OWNER OR ADMIN
 // =============================
-module.exports = { 
-  verifierToken, 
-  verifierAdmin, 
-  verifierProprietaireOuAdmin,
-  verifierTokenOptionnel,
-  SECRET_KEY 
+const isOwnerOrAdmin = (req, res, next) => {
+  const targetId = req.params.id || req.params.userId;
+  const currentUserId = req.user?.id;
+  const role = req.user?.role;
+
+  if (role === 'admin' || currentUserId === targetId) {
+    return next();
+  }
+
+  return res.status(403).json({
+    success: false,
+    message: 'Accès refusé - non autorisé'
+  });
+};
+
+// =============================
+// 🔓 OPTIONAL AUTH
+// =============================
+const optionalAuth = (req, res, next) => {
+  const authHeader = req.headers.authorization;
+
+  if (!authHeader || !authHeader.startsWith('Bearer')) {
+    return next();
+  }
+
+  const token = authHeader.split(' ')[1];
+
+  try {
+    const decoded = jwt.verify(token, SECRET_KEY);
+
+    req.user = {
+      id: decoded.id,
+      role: decoded.role
+    };
+
+  } catch (error) {
+    // on ignore volontairement
+  }
+
+  next();
+};
+
+// =============================
+// 📤 EXPORT
+// =============================
+module.exports = {
+  protect,
+  isAdmin,
+  isOwnerOrAdmin,
+  optionalAuth,
+  SECRET_KEY
 };

@@ -2,7 +2,7 @@ const express = require('express');
 const router = express.Router();
 
 const { inscription, connexion } = require('../controllers/authController');
-const { verifierToken, verifierAdmin } = require('../middleware/auth');
+const { protect, isAdmin } = require('../middleware/auth');
 const User = require('../models/User');
 
 // =============================
@@ -16,40 +16,34 @@ router.post('/inscription', inscription);
 router.post('/connexion', connexion);
 
 // Test API
-router.get('/test', (req, res) => res.json({ 
-  success: true, 
-  message: 'Auth API fonctionne' 
-}));
+router.get('/test', (req, res) => {
+  res.json({
+    success: true,
+    message: 'Auth API fonctionne'
+  });
+});
 
 // =============================
 // 🔒 ROUTES PROTÉGÉES
 // =============================
 
-// Profil utilisateur (nécessite token)
-router.get('/profil', verifierToken, async (req, res) => {
+// 👤 PROFIL UTILISATEUR
+router.get('/profil', protect, async (req, res) => {
   try {
-    const user = await User.findById(req.userId).select('-password');
-    
+    const user = await User.findById(req.user.id).select('-password');
+
     if (!user) {
       return res.status(404).json({
         success: false,
         message: "Utilisateur non trouvé"
       });
     }
-    
+
     res.json({
       success: true,
-      user: {
-        id: user._id,
-        email: user.email,
-        nom: user.nom,
-        prenom: user.prenom,
-        role: user.role,
-        phone: user.phone,
-        abonnement: user.abonnement,
-        createdAt: user.createdAt
-      }
+      user
     });
+
   } catch (error) {
     console.error("❌ Erreur profil:", error);
     res.status(500).json({
@@ -60,11 +54,11 @@ router.get('/profil', verifierToken, async (req, res) => {
 });
 
 // =============================
-// 👑 ROUTES ADMIN (protection admin requise)
+// 👑 ROUTES ADMIN
 // =============================
 
-// Liste tous les utilisateurs (admin seulement)
-router.get('/utilisateurs', verifierToken, verifierAdmin, async (req, res) => {
+// 📋 LISTE UTILISATEURS
+router.get('/utilisateurs', protect, isAdmin, async (req, res) => {
   try {
     const users = await User.find()
       .select('-password')
@@ -80,99 +74,86 @@ router.get('/utilisateurs', verifierToken, verifierAdmin, async (req, res) => {
     console.error("❌ Erreur liste utilisateurs:", err);
     res.status(500).json({
       success: false,
-      message: "Erreur serveur lors de la récupération des utilisateurs"
+      message: "Erreur serveur"
     });
   }
 });
 
-// Supprimer un utilisateur (admin seulement)
-router.delete('/utilisateurs/:id', verifierToken, verifierAdmin, async (req, res) => {
+// 🗑️ SUPPRIMER UTILISATEUR
+router.delete('/utilisateurs/:id', protect, isAdmin, async (req, res) => {
   try {
     const { id } = req.params;
-    
-    console.log(`🔍 Tentative de suppression de l'utilisateur: ${id}`);
-    console.log(`👤 Admin connecté: ${req.userId}`);
-    
-    // Vérifier si l'ID est valide
+
+    // validation Mongo ID
     if (!id.match(/^[0-9a-fA-F]{24}$/)) {
       return res.status(400).json({
         success: false,
-        message: "ID utilisateur invalide"
+        message: "ID invalide"
       });
     }
-    
-    // Empêcher la suppression de son propre compte
-    if (id === req.userId) {
-      console.log("⛔ Tentative d'auto-suppression bloquée");
+
+    // empêcher auto-suppression
+    if (id === req.user.id) {
       return res.status(400).json({
         success: false,
-        message: "Vous ne pouvez pas supprimer votre propre compte"
+        message: "Impossible de supprimer votre propre compte"
       });
     }
-    
-    // Vérifier si l'utilisateur existe
+
     const user = await User.findById(id);
+
     if (!user) {
-      console.log(`❌ Utilisateur ${id} non trouvé`);
       return res.status(404).json({
         success: false,
         message: "Utilisateur non trouvé"
       });
     }
-    
-    // Supprimer l'utilisateur
+
     await User.findByIdAndDelete(id);
-    
-    console.log(`✅ Utilisateur supprimé: ${user.email} (${user.nom} ${user.prenom})`);
-    
+
     res.json({
       success: true,
-      message: `Utilisateur ${user.email} supprimé avec succès`,
+      message: "Utilisateur supprimé avec succès",
       deletedUser: {
         id: user._id,
         email: user.email,
-        nom: user.nom,
-        prenom: user.prenom,
         role: user.role
       }
     });
-    
+
   } catch (error) {
-    console.error("❌ Erreur suppression utilisateur:", error);
+    console.error("❌ Erreur suppression:", error);
     res.status(500).json({
       success: false,
-      message: error.message || "Erreur serveur lors de la suppression"
+      message: error.message
     });
   }
 });
 
-// Statistiques (admin seulement)
-router.get('/stats', verifierToken, verifierAdmin, async (req, res) => {
+// =============================
+// 📊 STATISTIQUES ADMIN
+// =============================
+router.get('/stats', protect, isAdmin, async (req, res) => {
   try {
     const totalUsers = await User.countDocuments();
-    const totalAdmins = await User.countDocuments({ role: 'admin' });
-    const totalUsersOnly = await User.countDocuments({ role: 'user' });
-    const abonnementsActifs = await User.countDocuments({ 
-      'abonnement.actif': true,
-      'abonnement.expiration': { $gt: new Date() }
-    });
-    
-    // Récupérer les 5 derniers utilisateurs
+    const admins = await User.countDocuments({ role: 'admin' });
+    const users = await User.countDocuments({ role: 'user' });
+
     const derniersUtilisateurs = await User.find()
-      .select('nom prenom email createdAt')
+      .select('nom email role createdAt')
       .sort({ createdAt: -1 })
       .limit(5);
-    
+
     res.json({
       success: true,
       stats: {
         totalUsers,
-        admins: totalAdmins,
-        users: totalUsersOnly,
-        abonnementsActifs
+        admins,
+        users
       },
       derniersUtilisateurs
     });
+
   } catch (error) {
     console.error("❌ Erreur stats:", error);
     res.status(500).json({
@@ -182,57 +163,51 @@ router.get('/stats', verifierToken, verifierAdmin, async (req, res) => {
   }
 });
 
-// Mettre à jour le rôle d'un utilisateur (admin seulement)
-router.put('/utilisateurs/:id/role', verifierToken, verifierAdmin, async (req, res) => {
+// =============================
+// 👑 UPDATE ROLE USER
+// =============================
+router.put('/utilisateurs/:id/role', protect, isAdmin, async (req, res) => {
   try {
     const { id } = req.params;
     const { role } = req.body;
-    
-    // Vérifier si le rôle est valide
+
+    // validation role
     if (!['user', 'admin'].includes(role)) {
       return res.status(400).json({
         success: false,
-        message: "Rôle invalide. Les rôles acceptés sont: user, admin"
+        message: "Rôle invalide"
       });
     }
-    
-    // Empêcher de modifier son propre rôle
-    if (id === req.userId) {
+
+    // empêcher modification de soi-même
+    if (id === req.user.id) {
       return res.status(400).json({
         success: false,
-        message: "Vous ne pouvez pas modifier votre propre rôle"
+        message: "Action interdite sur votre propre compte"
       });
     }
-    
+
     const user = await User.findByIdAndUpdate(
       id,
-      { role: role },
-      { new: true, runValidators: true }
+      { role },
+      { new: true }
     ).select('-password');
-    
+
     if (!user) {
       return res.status(404).json({
         success: false,
         message: "Utilisateur non trouvé"
       });
     }
-    
-    console.log(`✅ Rôle de ${user.email} mis à jour: ${role}`);
-    
+
     res.json({
       success: true,
-      message: `Rôle de l'utilisateur mis à jour avec succès`,
-      user: {
-        id: user._id,
-        email: user.email,
-        nom: user.nom,
-        prenom: user.prenom,
-        role: user.role
-      }
+      message: "Rôle mis à jour",
+      user
     });
-    
+
   } catch (error) {
-    console.error("❌ Erreur mise à jour rôle:", error);
+    console.error("❌ Erreur role update:", error);
     res.status(500).json({
       success: false,
       message: error.message

@@ -6,3 +6,4 @@ dist/
 build/.history/
 .history/
 install-admin.js
+make-admin.js
