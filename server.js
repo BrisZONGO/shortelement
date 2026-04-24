@@ -9,7 +9,7 @@ dotenv.config();
 const app = express();
 
 // =============================
-// 📦 IMPORTS
+// 📦 IMPORTS ROUTES
 // =============================
 const authRoutes = require('./routes/authRoutes');
 const coursRoutes = require('./routes/coursRoutes');
@@ -18,11 +18,11 @@ const adminRoutes = require('./routes/adminRoutes');
 const partieRoutes = require('./routes/partieRoutes');
 const moduleRoutes = require('./routes/moduleRoutes');
 
-// ✅ IMPORT DU CRON
+// ✅ CRON
 const { startCronJobs } = require('./services/cronService');
 
 // =============================
-// 🔥 CONFIGURATION CORS CORRIGÉE (avec Vercel)
+// 🔥 CORS CONFIG (AMÉLIORÉ)
 // =============================
 const allowedOrigins = [
   'http://localhost:3000',
@@ -30,42 +30,26 @@ const allowedOrigins = [
   'https://formation-concours.netlify.app',
   'https://concours-directs-et-professionnels.netlify.app',
   'https://shortelement.onrender.com',
-  'https://formation-concours.vercel.app'  // ✅ AJOUT DE VERCEL
+  'https://formation-concours.vercel.app'
 ];
 
-// Middleware CORS principal
 app.use(cors({
-  origin: function(origin, callback) {
-    // Permettre les requêtes sans origin (Postman, apps mobile)
+  origin: (origin, callback) => {
     if (!origin) return callback(null, true);
-    
-    if (allowedOrigins.indexOf(origin) === -1) {
-      console.log(`❌ Origine bloquée par CORS: ${origin}`);
-      return callback(new Error('CORS policy violation'), false);
+
+    if (!allowedOrigins.includes(origin)) {
+      console.log(`❌ CORS bloqué: ${origin}`);
+      return callback(new Error('CORS policy violation'));
     }
-    console.log(`✅ Origine autorisée: ${origin}`);
-    return callback(null, true);
+
+    console.log(`✅ CORS autorisé: ${origin}`);
+    callback(null, true);
   },
-  credentials: true,
-  methods: ['GET', 'POST', 'PUT', 'DELETE', 'OPTIONS'],
-  allowedHeaders: ['Content-Type', 'Authorization', 'X-Requested-With']
+  credentials: true
 }));
 
-// Middleware CORS supplémentaire pour les headers
-app.use((req, res, next) => {
-  const origin = req.headers.origin;
-  if (allowedOrigins.includes(origin)) {
-    res.header('Access-Control-Allow-Origin', origin);
-  }
-  res.header('Access-Control-Allow-Credentials', 'true');
-  res.header('Access-Control-Allow-Methods', 'GET, POST, PUT, DELETE, OPTIONS');
-  res.header('Access-Control-Allow-Headers', 'Origin, X-Requested-With, Content-Type, Accept, Authorization');
-  
-  if (req.method === 'OPTIONS') {
-    return res.sendStatus(200);
-  }
-  next();
-});
+// ✅ Gestion explicite OPTIONS (important pour frontend)
+app.options('*', cors());
 
 // =============================
 // 📦 MIDDLEWARES
@@ -78,20 +62,34 @@ app.use(express.static(path.join(__dirname, 'public')));
 app.use('/uploads', express.static(path.join(__dirname, 'uploads')));
 
 // =============================
+// 🌐 ROUTES TEST (ANTI-404)
+// =============================
+
+// 👉 TEST MODULES
+app.get('/api/modules/test', (req, res) => {
+  res.json({ success: true, message: "Modules OK" });
+});
+
+// 👉 TEST PARTIES
+app.get('/api/parties/test', (req, res) => {
+  res.json({ success: true, message: "Parties OK" });
+});
+
+// =============================
 // 🌐 ROUTES PUBLIQUES
 // =============================
 app.get('/', (req, res) => {
-  res.json({ 
-    success: true, 
+  res.json({
+    success: true,
     message: "API Concours OK",
-    version: "1.0.0",
+    version: "2.0.0",
     endpoints: {
       auth: "/api/auth",
       cours: "/api/cours",
       payment: "/api/payment",
       admin: "/api/admin",
-      parties: "/api/parties",
-      modules: "/api/modules"
+      modules: "/api/modules",
+      parties: "/api/parties"
     }
   });
 });
@@ -100,8 +98,7 @@ app.get('/health', (req, res) => {
   res.json({
     status: "ok",
     db: mongoose.connection.readyState === 1,
-    timestamp: new Date().toISOString(),
-    uptime: process.uptime()
+    timestamp: new Date().toISOString()
   });
 });
 
@@ -112,13 +109,14 @@ app.use('/api/auth', authRoutes);
 app.use('/api/cours', coursRoutes);
 app.use('/api/payment', paymentRoutes);
 app.use('/api/admin', adminRoutes);
-app.use('/api/parties', partieRoutes);
 app.use('/api/modules', moduleRoutes);
+app.use('/api/parties', partieRoutes);
 
 // =============================
-// ❌ 404 - Route non trouvée
+// ❌ 404 HANDLER
 // =============================
 app.use((req, res) => {
+  console.log(`❌ 404: ${req.method} ${req.originalUrl}`);
   res.status(404).json({
     success: false,
     message: `Route non trouvée: ${req.method} ${req.originalUrl}`
@@ -129,97 +127,70 @@ app.use((req, res) => {
 // ❌ ERROR HANDLER GLOBAL
 // =============================
 app.use((err, req, res, next) => {
-  console.error("❌ Erreur serveur:", err.message);
-  console.error(err.stack);
+  console.error("🔥 ERREUR:", err.message);
 
   res.status(err.status || 500).json({
     success: false,
-    message: err.message || "Erreur interne du serveur",
-    ...(process.env.NODE_ENV === 'development' && { stack: err.stack })
+    message: err.message || "Erreur serveur"
   });
 });
 
 // =============================
-// 🚀 START SERVER AVEC CRON
+// 🚀 START SERVER
 // =============================
 const PORT = process.env.PORT || 5000;
 
-// Vérification de la configuration requise
-const checkRequiredEnv = () => {
+// Vérification ENV
+const checkEnv = () => {
   const required = ['MONGODB_URI', 'JWT_SECRET'];
-  const missing = required.filter(key => !process.env[key]);
-  
-  if (missing.length > 0) {
-    console.error(`❌ Variables d'environnement manquantes: ${missing.join(', ')}`);
+  const missing = required.filter(e => !process.env[e]);
+
+  if (missing.length) {
+    console.error(`❌ Variables manquantes: ${missing.join(', ')}`);
     return false;
   }
   return true;
 };
 
-// Démarrage du serveur
 const startServer = async () => {
   try {
-    // Vérifier les variables d'environnement
-    if (!checkRequiredEnv()) {
-      process.exit(1);
-    }
+    if (!checkEnv()) process.exit(1);
 
-    // Connexion à MongoDB
-    console.log("🔄 Connexion à MongoDB...");
-    await mongoose.connect(process.env.MONGODB_URI, {
-      useNewUrlParser: true,
-      useUnifiedTopology: true,
-      serverSelectionTimeoutMS: 5000
-    });
-    
-    console.log("✅ MongoDB connecté avec succès");
-    console.log(`📊 Base de données: ${mongoose.connection.name}`);
+    console.log("🔄 Connexion MongoDB...");
+    await mongoose.connect(process.env.MONGODB_URI);
 
-    // Démarrer les tâches cron (planification des rappels)
-    console.log("🔄 Initialisation des tâches planifiées...");
+    console.log("✅ MongoDB connecté");
+
+    // ✅ CRON
     startCronJobs();
 
-    // Démarrer le serveur HTTP
     app.listen(PORT, () => {
-      console.log(`\n🚀 Serveur démarré avec succès !`);
-      console.log(`📡 Port: ${PORT}`);
-      console.log(`🌍 Environnement: ${process.env.NODE_ENV || 'development'}`);
-      console.log(`🔗 URL API: http://localhost:${PORT}`);
-      console.log(`✅ Health check: http://localhost:${PORT}/health`);
-      console.log(`\n⏰ Tâches cron actives:`);
-      console.log(`   - 00:00 → Désactivation abonnements expirés`);
-      console.log(`   - 08:00 & 18:00 → Rappels WhatsApp`);
-      console.log(`   - 20:00 → Rapport quotidien`);
-      console.log(`   - Dimanche 03:00 → Nettoyage données`);
-      console.log(`\n✨ Serveur prêt à recevoir des requêtes\n`);
+      console.log(`
+🚀 SERVEUR OK
+📡 Port: ${PORT}
+🌍 Mode: ${process.env.NODE_ENV || 'dev'}
+
+🔗 http://localhost:${PORT}
+💓 /health OK
+📦 Modules OK → /api/modules/test
+📦 Parties OK → /api/parties/test
+      `);
     });
 
-  } catch (error) {
-    console.error("❌ Erreur lors du démarrage du serveur:", error.message);
-    
-    // Tentative de reconnexion en cas d'erreur MongoDB
-    if (error.name === 'MongoServerSelectionError') {
-      console.error("⚠️ Impossible de se connecter à MongoDB. Vérifiez votre connexion internet et l'URI.");
-    }
-    
+  } catch (err) {
+    console.error("❌ Erreur démarrage:", err.message);
     process.exit(1);
   }
 };
 
-// Gestion des signaux d'arrêt
+// =============================
+// 🔴 SHUTDOWN PROPRE
+// =============================
 process.on('SIGINT', async () => {
-  console.log('\n🔴 Arrêt du serveur...');
+  console.log('🔴 Fermeture...');
   await mongoose.disconnect();
-  console.log('✅ MongoDB déconnecté');
   process.exit(0);
 });
 
-process.on('SIGTERM', async () => {
-  console.log('\n🔴 Arrêt du serveur...');
-  await mongoose.disconnect();
-  console.log('✅ MongoDB déconnecté');
-  process.exit(0);
-});
-
-// Démarrer le serveur
+// START
 startServer();

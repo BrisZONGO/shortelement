@@ -7,7 +7,8 @@ const { isUnlocked } = require("../utils/unlock");
 // =============================
 const getAllCours = async (req, res) => {
   try {
-    const cours = await Cours.find().sort({ createdAt: -1 });
+    const cours = await Cours.find({ actif: { $ne: false } })
+      .sort({ createdAt: -1 });
 
     res.json({
       success: true,
@@ -34,11 +35,14 @@ const getCoursById = async (req, res) => {
       });
     }
 
-    // 🔥 LOGIQUE SEMAINE (unlock)
-    const semaines = cours.semaines?.map((week) => ({
+    // 🔓 Gestion unlock sécurisée
+    const semaines = (cours.semaines || []).map((week) => ({
       ...week._doc,
-      unlocked: isUnlocked(week.weekIndex, cours.startDate)
-    })) || [];
+      unlocked: isUnlocked(
+        week.weekIndex || 0,
+        cours.startDate || cours.createdAt
+      )
+    }));
 
     res.json({
       success: true,
@@ -68,7 +72,7 @@ const getCoursPremium = async (req, res) => {
       success: true,
       count: coursPremium.length,
       cours: coursPremium,
-      abonnement: req.abonnement
+      abonnement: req.abonnement || null
     });
   } catch (error) {
     console.error("❌ Erreur getCoursPremium:", error);
@@ -118,20 +122,21 @@ const createCours = async (req, res) => {
       image,
       categorie,
       semaines,
-      startDate
+      startDate,
+      anneeAcademique
     } = req.body;
 
-    if (!titre || !description || !duree) {
+    if (!titre || !description) {
       return res.status(400).json({
         success: false,
-        message: "Champs obligatoires manquants"
+        message: "Titre et description obligatoires"
       });
     }
 
     const cours = new Cours({
       titre,
       description,
-      duree,
+      duree: duree || 0,
       niveau: niveau || "débutant",
       prix: prix || 0,
       estPremium: estPremium || false,
@@ -139,6 +144,8 @@ const createCours = async (req, res) => {
       categorie,
       semaines: semaines || [],
       startDate: startDate || new Date(),
+      anneeAcademique,
+      actif: true,
       createdBy: req.userId
     });
 
@@ -146,7 +153,7 @@ const createCours = async (req, res) => {
 
     res.status(201).json({
       success: true,
-      message: "Cours créé",
+      message: "Cours créé avec succès",
       cours
     });
 
@@ -163,7 +170,7 @@ const updateCours = async (req, res) => {
   try {
     const cours = await Cours.findByIdAndUpdate(
       req.params.id,
-      { ...req.body, updatedAt: Date.now() },
+      { ...req.body, updatedAt: new Date() },
       { new: true, runValidators: true }
     );
 
@@ -187,11 +194,15 @@ const updateCours = async (req, res) => {
 };
 
 // =============================
-// 🗑️ DELETE COURS
+// 🗑️ DELETE COURS (soft delete)
 // =============================
 const deleteCours = async (req, res) => {
   try {
-    const cours = await Cours.findByIdAndDelete(req.params.id);
+    const cours = await Cours.findByIdAndUpdate(
+      req.params.id,
+      { actif: false },
+      { new: true }
+    );
 
     if (!cours) {
       return res.status(404).json({
@@ -202,7 +213,7 @@ const deleteCours = async (req, res) => {
 
     res.json({
       success: true,
-      message: "Cours supprimé"
+      message: "Cours supprimé (désactivé)"
     });
 
   } catch (error) {
@@ -218,7 +229,12 @@ const searchCours = async (req, res) => {
   try {
     const { q } = req.query;
 
+    if (!q) {
+      return res.json({ success: true, cours: [] });
+    }
+
     const cours = await Cours.find({
+      actif: true,
       $or: [
         { titre: { $regex: q, $options: 'i' } },
         { description: { $regex: q, $options: 'i' } }
@@ -227,6 +243,7 @@ const searchCours = async (req, res) => {
 
     res.json({
       success: true,
+      count: cours.length,
       cours
     });
 
@@ -237,15 +254,21 @@ const searchCours = async (req, res) => {
 };
 
 // =============================
-// 🧠 QCM (P8)
+// 🧠 QCM (CORRIGÉ + SÉCURISÉ)
 // =============================
 const submitQCM = async (req, res) => {
   try {
     const { coursId, semaineIndex, partieIndex, score } = req.body;
-    const userId = req.user.id;
+
+    if (!req.userId) {
+      return res.status(401).json({
+        success: false,
+        message: "Utilisateur non authentifié"
+      });
+    }
 
     let progression = await Progression.findOne({
-      userId,
+      userId: req.userId,
       coursId,
       semaineIndex,
       partieIndex
@@ -253,18 +276,19 @@ const submitQCM = async (req, res) => {
 
     if (!progression) {
       progression = new Progression({
-        userId,
+        userId: req.userId,
         coursId,
         semaineIndex,
-        partieIndex
+        partieIndex,
+        tentatives: 0
       });
     }
 
     progression.score = score;
     progression.tentatives += 1;
 
-    // 🔥 VALIDATION
-    progression.validated = score >= 80;
+    // 🔥 Règle validation
+    progression.validated = score >= 80 || progression.tentatives >= 2;
 
     await progression.save();
 

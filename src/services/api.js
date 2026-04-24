@@ -1,11 +1,18 @@
 import axios from "axios";
 
-const API = axios.create({
-  baseURL: "https://shortelement.onrender.com"
+const API_URL = process.env.REACT_APP_API_URL || "http://localhost:5000";
+
+const api = axios.create({
+  baseURL: API_URL,
+  headers: {
+    "Content-Type": "application/json"
+  }
 });
 
-// 🔥 AJOUT AUTOMATIQUE TOKEN
-API.interceptors.request.use((config) => {
+// =============================
+// 🔐 INTERCEPTOR TOKEN AUTO
+// =============================
+api.interceptors.request.use((config) => {
   const token = localStorage.getItem("token");
 
   if (token) {
@@ -15,4 +22,21 @@ API.interceptors.request.use((config) => {
   return config;
 });
 
-export default API;
+// =============================
+// ❌ GESTION ERREURS GLOBALES
+// =============================
+api.interceptors.response.use(
+  (response) => response,
+  (error) => {
+    console.error("❌ API ERROR:", error.response?.data || error.message);
+
+    if (error.response?.status === 401) {
+      localStorage.removeItem("token");
+      window.location.href = "/";
+    }
+
+    return Promise.reject(error);
+  }
+);
+
+export default api;
