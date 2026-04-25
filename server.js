@@ -1,12 +1,18 @@
 const express = require('express');
 const mongoose = require('mongoose');
 const cors = require('cors');
+const compression = require('compression');
 const dotenv = require('dotenv');
 const path = require('path');
 
 dotenv.config();
 
 const app = express();
+
+// =============================
+// 🔥 ACTIVATION COMPRESSION GZIP
+// =============================
+app.use(compression());
 
 // =============================
 // 📦 IMPORTS ROUTES
@@ -169,6 +175,7 @@ const startServer = async () => {
 🚀 SERVEUR OK
 📡 Port: ${PORT}
 🌍 Mode: ${process.env.NODE_ENV || 'dev'}
+🗜️ Compression Gzip: ACTIVÉE
 
 🔗 http://localhost:${PORT}
 💓 /health OK
