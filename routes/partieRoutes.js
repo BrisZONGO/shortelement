@@ -1,7 +1,4 @@
-const express = require('express');
-const router = express.Router();
-
-const { verifierToken, verifierAdmin } = require('../middleware/auth');
+const express = require("express");
 
 const {
   createPartie,
@@ -10,167 +7,29 @@ const {
   updatePartie,
   deletePartie,
   reorderParties
-} = require('../controllers/partieController');
+} = require("../controllers/partieController");
+
+const { protect, isAdmin } = require("../middleware/auth");
+
+const router = express.Router();
 
 // =============================
-// 🧪 ROUTE TEST (ANTI-404)
+// 📄 PUBLIC
 // =============================
-router.get('/test', (req, res) => {
-  res.json({
-    success: true,
-    message: "Parties routes OK ✅"
-  });
-});
+
+router.get("/module/:moduleId", getPartiesByModule);
+
+router.get("/:id", getPartieById);
 
 // =============================
-// 📦 GET PARTIES PAR MODULE
+// 👑 ADMIN
 // =============================
-router.get('/module/:moduleId', async (req, res, next) => {
-  try {
-    const { moduleId } = req.params;
+router.post("/", protect, isAdmin, createPartie);
 
-    console.log(`📚 Chargement parties pour module: ${moduleId}`);
+router.put("/:id", protect, isAdmin, updatePartie);
 
-    if (!moduleId) {
-      return res.status(400).json({
-        success: false,
-        message: "moduleId requis"
-      });
-    }
+router.delete("/:id", protect, isAdmin, deletePartie);
 
-    req.params.moduleId = moduleId;
-    return getPartiesByModule(req, res, next);
-
-  } catch (error) {
-    console.error("❌ Erreur getPartiesByModule:", error.message);
-    next(error);
-  }
-});
-
-// =============================
-// 📄 GET PARTIE BY ID
-// =============================
-router.get('/:id', async (req, res, next) => {
-  try {
-    const { id } = req.params;
-
-    console.log(`📄 Chargement partie: ${id}`);
-
-    if (!id) {
-      return res.status(400).json({
-        success: false,
-        message: "id requis"
-      });
-    }
-
-    req.params.id = id;
-    return getPartieById(req, res, next);
-
-  } catch (error) {
-    console.error("❌ Erreur getPartieById:", error.message);
-    next(error);
-  }
-});
-
-// =============================
-// ➕ CREATE PARTIE (ADMIN)
-// =============================
-router.post('/', verifierToken, verifierAdmin, async (req, res, next) => {
-  try {
-    console.log("➕ Création partie:", req.body);
-
-    if (!req.body.moduleId || !req.body.titre) {
-      return res.status(400).json({
-        success: false,
-        message: "moduleId et titre requis"
-      });
-    }
-
-    return createPartie(req, res, next);
-
-  } catch (error) {
-    console.error("❌ Erreur createPartie:", error.message);
-    next(error);
-  }
-});
-
-// =============================
-// ✏️ UPDATE PARTIE (ADMIN)
-// =============================
-router.put('/:id', verifierToken, verifierAdmin, async (req, res, next) => {
-  try {
-    const { id } = req.params;
-
-    console.log(`✏️ Update partie: ${id}`);
-
-    if (!id) {
-      return res.status(400).json({
-        success: false,
-        message: "id requis"
-      });
-    }
-
-    return updatePartie(req, res, next);
-
-  } catch (error) {
-    console.error("❌ Erreur updatePartie:", error.message);
-    next(error);
-  }
-});
-
-// =============================
-// 🗑️ DELETE PARTIE (ADMIN)
-// =============================
-router.delete('/:id', verifierToken, verifierAdmin, async (req, res, next) => {
-  try {
-    const { id } = req.params;
-
-    console.log(`🗑️ Suppression partie: ${id}`);
-
-    if (!id) {
-      return res.status(400).json({
-        success: false,
-        message: "id requis"
-      });
-    }
-
-    return deletePartie(req, res, next);
-
-  } catch (error) {
-    console.error("❌ Erreur deletePartie:", error.message);
-    next(error);
-  }
-});
-
-// =============================
-// 🔄 REORDER PARTIES (ADMIN)
-// =============================
-router.put('/reorder/:moduleId', verifierToken, verifierAdmin, async (req, res, next) => {
-  try {
-    const { moduleId } = req.params;
-
-    console.log(`🔄 Réorganisation parties module: ${moduleId}`);
-
-    if (!moduleId) {
-      return res.status(400).json({
-        success: false,
-        message: "moduleId requis"
-      });
-    }
-
-    if (!Array.isArray(req.body.ordre)) {
-      return res.status(400).json({
-        success: false,
-        message: "ordre (array) requis"
-      });
-    }
-
-    return reorderParties(req, res, next);
-
-  } catch (error) {
-    console.error("❌ Erreur reorderParties:", error.message);
-    next(error);
-  }
-});
+router.put("/reorder", protect, isAdmin, reorderParties);
 
 module.exports = router;
