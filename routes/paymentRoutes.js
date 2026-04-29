@@ -1,29 +1,54 @@
 const express = require('express');
 const router = express.Router();
-const { verifierToken } = require('../middleware/auth');
-const {
-  initPaiement,
-  confirmerPaiement,
-  initPayment,
-  notifyPayment,
-  verifierStatutPaiement
-} = require('../controllers/paymentController');
+
+// ✅ middleware corrigé (nouveau standard)
+const { protect, isAdmin } = require('../middleware/auth');
+
+// ✅ import sécurisé (évite undefined)
+const paymentController = require('../controllers/paymentController');
+
+// =============================
+// 🔍 CHECK FUNCTIONS (ANTI-CRASH)
+// =============================
+const safe = (fn, name) => {
+  if (!fn) {
+    console.error(`❌ Fonction manquante dans paymentController: ${name}`);
+    return (req, res) =>
+      res.status(500).json({
+        success: false,
+        message: `Fonction ${name} non implémentée`
+      });
+  }
+  return fn;
+};
 
 // =============================
 // 💳 ROUTES DE PAIEMENT
 // =============================
 
-// Routes de simulation (pour tests)
-router.post('/init', initPaiement);
-router.post('/confirm', confirmerPaiement);
+// 🧪 SIMULATION (tests)
+router.post('/init', safe(paymentController.initPaiement, 'initPaiement'));
+router.post('/confirm', safe(paymentController.confirmerPaiement, 'confirmerPaiement'));
 
-// Route d'initiation CinetPay (réelle)
-router.post('/init-cinetpay', initPayment);
+// 💰 INIT PAIEMENT CinetPay
+router.post('/init-cinetpay', protect, safe(paymentController.initPayment, 'initPayment'));
 
-// Webhook de notification CinetPay (route publique)
-router.post('/notify', notifyPayment);
+// 🔔 WEBHOOK (PUBLIC - NE PAS PROTÉGER)
+router.post('/notify', safe(paymentController.notifyPayment, 'notifyPayment'));
 
-// Route protégée pour vérifier le statut de l'abonnement
-router.get('/statut', verifierToken, verifierStatutPaiement);
+// 📊 STATUT ABONNEMENT
+router.get('/statut', protect, safe(paymentController.verifierStatutPaiement, 'verifierStatutPaiement'));
+
+// =============================
+// 📄 UTILISATEUR
+// =============================
+
+// Mes paiements
+router.get('/mes-paiements', protect, safe(paymentController.getUserPayments, 'getUserPayments'));
+
+// =============================
+// 👑 ADMIN
+// =============================
+router.get('/all', protect, isAdmin, safe(paymentController.getAllPayments, 'getAllPayments'));
 
 module.exports = router;

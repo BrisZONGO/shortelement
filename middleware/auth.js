@@ -4,7 +4,8 @@ const User = require('../models/User');
 // =============================
 // 🔐 SECRET KEY
 // =============================
-const SECRET_KEY = process.env.JWT_SECRET || 'votre_cle_secrete_tres_longue_et_complexe_123456789';
+const SECRET_KEY =
+  process.env.JWT_SECRET || 'votre_cle_secrete_tres_longue_et_complexe_123456789';
 
 // =============================
 // 🔐 MIDDLEWARE PRINCIPAL (PROTECT)
@@ -23,16 +24,15 @@ const protect = async (req, res, next) => {
 
   try {
     const decoded = jwt.verify(token, SECRET_KEY);
+    const userId = decoded.id || decoded.userId;
 
-    // ⚠️ STANDARDISATION : on utilise id (PAS userId)
     req.user = {
-      id: decoded.id,
+      id: userId,
       role: decoded.role,
       email: decoded.email || null
     };
 
-    // Vérification user en base
-    const user = await User.findById(decoded.id).select('-password');
+    const user = await User.findById(userId).select('-password');
 
     if (!user) {
       return res.status(401).json({
@@ -43,9 +43,7 @@ const protect = async (req, res, next) => {
 
     req.userData = user;
     next();
-
   } catch (error) {
-
     if (error.name === 'TokenExpiredError') {
       return res.status(401).json({
         success: false,
@@ -115,12 +113,13 @@ const optionalAuth = (req, res, next) => {
 
   try {
     const decoded = jwt.verify(token, SECRET_KEY);
+    const userId = decoded.id || decoded.userId;
 
     req.user = {
-      id: decoded.id,
-      role: decoded.role
+      id: userId,
+      role: decoded.role,
+      email: decoded.email || null
     };
-
   } catch (error) {
     // on ignore volontairement
   }
@@ -136,5 +135,7 @@ module.exports = {
   isAdmin,
   isOwnerOrAdmin,
   optionalAuth,
-  SECRET_KEY
+  SECRET_KEY,
+  verifierToken: protect,
+  verifierAdmin: isAdmin
 };
