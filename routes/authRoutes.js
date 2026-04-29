@@ -43,7 +43,6 @@ router.get('/profil', protect, async (req, res) => {
       success: true,
       user
     });
-
   } catch (error) {
     console.error("❌ Erreur profil:", error);
     res.status(500).json({
@@ -69,7 +68,6 @@ router.get('/utilisateurs', protect, isAdmin, async (req, res) => {
       count: users.length,
       users
     });
-
   } catch (err) {
     console.error("❌ Erreur liste utilisateurs:", err);
     res.status(500).json({
@@ -84,7 +82,6 @@ router.delete('/utilisateurs/:id', protect, isAdmin, async (req, res) => {
   try {
     const { id } = req.params;
 
-    // validation Mongo ID
     if (!id.match(/^[0-9a-fA-F]{24}$/)) {
       return res.status(400).json({
         success: false,
@@ -92,7 +89,6 @@ router.delete('/utilisateurs/:id', protect, isAdmin, async (req, res) => {
       });
     }
 
-    // empêcher auto-suppression
     if (id === req.user.id) {
       return res.status(400).json({
         success: false,
@@ -120,7 +116,6 @@ router.delete('/utilisateurs/:id', protect, isAdmin, async (req, res) => {
         role: user.role
       }
     });
-
   } catch (error) {
     console.error("❌ Erreur suppression:", error);
     res.status(500).json({
@@ -130,9 +125,7 @@ router.delete('/utilisateurs/:id', protect, isAdmin, async (req, res) => {
   }
 });
 
-// =============================
 // 📊 STATISTIQUES ADMIN
-// =============================
 router.get('/stats', protect, isAdmin, async (req, res) => {
   try {
     const totalUsers = await User.countDocuments();
@@ -153,7 +146,6 @@ router.get('/stats', protect, isAdmin, async (req, res) => {
       },
       derniersUtilisateurs
     });
-
   } catch (error) {
     console.error("❌ Erreur stats:", error);
     res.status(500).json({
@@ -163,15 +155,12 @@ router.get('/stats', protect, isAdmin, async (req, res) => {
   }
 });
 
-// =============================
 // 👑 UPDATE ROLE USER
-// =============================
 router.put('/utilisateurs/:id/role', protect, isAdmin, async (req, res) => {
   try {
     const { id } = req.params;
     const { role } = req.body;
 
-    // validation role
     if (!['user', 'admin'].includes(role)) {
       return res.status(400).json({
         success: false,
@@ -179,7 +168,6 @@ router.put('/utilisateurs/:id/role', protect, isAdmin, async (req, res) => {
       });
     }
 
-    // empêcher modification de soi-même
     if (id === req.user.id) {
       return res.status(400).json({
         success: false,
@@ -205,9 +193,55 @@ router.put('/utilisateurs/:id/role', protect, isAdmin, async (req, res) => {
       message: "Rôle mis à jour",
       user
     });
-
   } catch (error) {
     console.error("❌ Erreur role update:", error);
+    res.status(500).json({
+      success: false,
+      message: error.message
+    });
+  }
+});
+
+// 🔁 ACTIVER / DÉSACTIVER UTILISATEUR
+router.put('/utilisateurs/:id/actif', protect, isAdmin, async (req, res) => {
+  try {
+    const { id } = req.params;
+    const { actif } = req.body;
+
+    if (typeof actif !== 'boolean') {
+      return res.status(400).json({
+        success: false,
+        message: "La valeur actif doit être true ou false"
+      });
+    }
+
+    if (id === req.user.id) {
+      return res.status(400).json({
+        success: false,
+        message: "Action interdite sur votre propre compte"
+      });
+    }
+
+    const user = await User.findByIdAndUpdate(
+      id,
+      { actif },
+      { new: true }
+    ).select('-password');
+
+    if (!user) {
+      return res.status(404).json({
+        success: false,
+        message: "Utilisateur non trouvé"
+      });
+    }
+
+    res.json({
+      success: true,
+      message: actif ? "Utilisateur réactivé" : "Utilisateur désactivé",
+      user
+    });
+  } catch (error) {
+    console.error("❌ Erreur activation user:", error);
     res.status(500).json({
       success: false,
       message: error.message
