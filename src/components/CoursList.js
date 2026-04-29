@@ -1,241 +1,159 @@
 import React, { useState, useEffect } from 'react';
-import axios from 'axios';
-import { isUnlocked, getUnlockDate } from '../utils/dateUtils';
+import { Link } from 'react-router-dom';
+import coursService from '../services/coursService';
+import CoursEditModal from './CoursEditModal';
 
-const API_URL = process.env.REACT_APP_API_URL || 'http://localhost:5000';
-
-const CoursList = ({ user, refreshTrigger }) => {
-
+function CoursList({ refreshTrigger, user }) {
   const [cours, setCours] = useState([]);
-  const [coursPremium, setCoursPremium] = useState([]);
   const [loading, setLoading] = useState(true);
-  const [error, setError] = useState(null);
-  const [activeTab, setActiveTab] = useState('all');
   const [searchTerm, setSearchTerm] = useState('');
   const [selectedCours, setSelectedCours] = useState(null);
-  const [showPayment, setShowPayment] = useState(false);
+  const [showModal, setShowModal] = useState(false);
 
-  // 🔐 abonnement
-  const isPremiumUser = user?.abonnement?.actif === true;
+  const token = localStorage.getItem('token');
+  const userRole = user?.role || localStorage.getItem('userRole') || 'guest';
 
-  // =============================
-  // 📚 FETCH COURS
-  // =============================
   useEffect(() => {
-    fetchCours();
+    loadCours();
   }, [refreshTrigger]);
 
-  const fetchCours = async () => {
+  const loadCours = async () => {
+    setLoading(true);
     try {
-      setLoading(true);
-
-      const response = await axios.get(`${API_URL}/api/cours`);
-      setCours(response.data.cours || []);
-
-      if (user?.token) {
-        try {
-          const premiumResponse = await axios.get(`${API_URL}/api/cours/premium/liste`, {
-            headers: { Authorization: `Bearer ${user.token}` }
-          });
-          setCoursPremium(premiumResponse.data.cours || []);
-        } catch {
-          console.log("Accès premium refusé");
-        }
-      }
-
-      setError(null);
-    } catch (err) {
-      console.error(err);
-      setError("Erreur chargement cours");
+      const data = await coursService.getAll();
+      setCours(data.cours || []);
+    } catch (error) {
+      console.error('Erreur chargement cours:', error);
     } finally {
       setLoading(false);
     }
   };
 
-  // =============================
-  // 🔍 FILTRE
-  // =============================
-  const getFilteredCours = () => {
-    let filtered = [];
+  const handleSearch = async () => {
+    if (!searchTerm.trim()) return loadCours();
 
-    if (activeTab === 'all') filtered = cours;
-    if (activeTab === 'free') filtered = cours.filter(c => !c.estPremium);
-    if (activeTab === 'premium') filtered = coursPremium;
-
-    if (searchTerm) {
-      filtered = filtered.filter(c =>
-        c.titre?.toLowerCase().includes(searchTerm.toLowerCase()) ||
-        c.description?.toLowerCase().includes(searchTerm.toLowerCase())
-      );
+    try {
+      const data = await coursService.search(searchTerm);
+      setCours(data.cours || []);
+    } catch (error) {
+      console.error('Erreur recherche:', error);
     }
-
-    return filtered;
   };
 
-  // =============================
-  // 📊 GROUP BY YEAR (P3)
-  // =============================
-  const groupByYear = (cours) => {
-    const grouped = {};
-
-    cours.forEach(c => {
-      const year = new Date(c.createdAt).getFullYear();
-      const label = `${year}-${year + 1}`;
-
-      if (!grouped[label]) grouped[label] = [];
-      grouped[label].push(c);
-    });
-
-    return grouped;
+  const handleEdit = (coursItem) => {
+    setSelectedCours(coursItem);
+    setShowModal(true);
   };
 
-  const filteredCours = getFilteredCours();
-  const groupedCours = groupByYear(filteredCours);
+  const handleDelete = async (id) => {
+    if (!token) return alert('⛔ Non autorisé');
 
-  // =============================
-  // 💰 FORMAT PRIX
-  // =============================
-  const formatPrix = (prix) => {
-    if (!prix || prix === 0) return 'Gratuit';
-    return `${prix} FCFA`;
+    if (window.confirm('Supprimer ce cours ?')) {
+      try {
+        await coursService.delete(id, token);
+        loadCours();
+        alert('✅ Cours supprimé');
+      } catch (error) {
+        console.error(error);
+        alert('❌ Erreur suppression');
+      }
+    }
   };
 
-  // =============================
-  // 💳 ACHAT
-  // =============================
-  const handleAcheter = (cours) => {
-    setSelectedCours(cours);
-    setShowPayment(true);
-  };
+  const handleUpdate = () => loadCours();
 
-  // =============================
-  // ⏳ LOADING
-  // =============================
-  if (loading) return <div style={{ textAlign: 'center', padding: '50px' }}>⏳ Chargement...</div>;
+  if (loading) {
+    return <div style={{ textAlign: 'center', padding: '50px' }}>⏳ Chargement...</div>;
+  }
 
-  if (error) return <div style={{ color: 'red', textAlign: 'center' }}>❌ {error}</div>;
-
-  // =============================
-  // 🎨 UI
-  // =============================
   return (
-    <div style={{ maxWidth: '1200px', margin: 'auto', padding: '20px' }}>
+    <div className="container">
+      <h2>📚 Liste des cours</h2>
 
-      <h1>📚 Nos Cours</h1>
+      <p>
+        👤 Rôle :
+        <strong style={{ marginLeft: 5, color: userRole === 'admin' ? 'green' : 'blue' }}>
+          {userRole}
+        </strong>
+      </p>
 
-      {/* 🔍 SEARCH */}
-      <input
-        type="text"
-        placeholder="Rechercher..."
-        value={searchTerm}
-        onChange={(e) => setSearchTerm(e.target.value)}
-        style={{ padding: '10px', width: '100%', marginBottom: '20px' }}
-      />
+      <div className="card">
+        <input
+          type="text"
+          className="input"
+          placeholder="Rechercher un cours..."
+          value={searchTerm}
+          onChange={(e) => setSearchTerm(e.target.value)}
+          onKeyDown={(e) => e.key === 'Enter' && handleSearch()}
+        />
 
-      {/* 🧭 TABS */}
-      <div style={{ display: 'flex', gap: '10px', marginBottom: '20px' }}>
-        <button onClick={() => setActiveTab('all')}>Tous</button>
-        <button onClick={() => setActiveTab('free')}>Gratuits</button>
-        <button onClick={() => setActiveTab('premium')}>Premium</button>
+        <div style={{ display: 'flex', gap: 10, marginTop: 10 }}>
+          <button className="btn" onClick={handleSearch}>🔍 Rechercher</button>
+          <button className="btn" onClick={loadCours} style={{ backgroundColor: '#6c757d' }}>
+            🔄 Reset
+          </button>
+        </div>
       </div>
 
-      {/* 🔒 MESSAGE PREMIUM */}
-      {activeTab === 'premium' && !isPremiumUser && (
-        <p style={{ color: 'orange' }}>
-          🔒 Abonnement requis pour voir les cours premium
-        </p>
-      )}
-
-      {/* 📦 GROUPED DISPLAY */}
-      {Object.keys(groupedCours).length === 0 ? (
-        <p>Aucun cours trouvé</p>
+      {cours.length === 0 ? (
+        <p style={{ textAlign: 'center', padding: '50px' }}>📭 Aucun cours</p>
       ) : (
-        Object.entries(groupedCours).map(([year, coursList]) => (
-          <div key={year} style={{ marginBottom: '40px' }}>
+        <div className="cours-grid">
+          {cours.map((c) => (
+            <div key={c._id} className="card">
+              {c.image && (
+                <img
+                  src={c.image}
+                  alt={c.titre}
+                  loading="lazy"
+                  className="cours-image"
+                  onError={(e) => {
+                    e.target.src = 'https://via.placeholder.com/300x200?text=Image';
+                  }}
+                />
+              )}
 
-            <h2 style={{ borderBottom: '2px solid #007bff', paddingBottom: '5px' }}>
-              📅 Année académique {year}
-            </h2>
+              <h3>{c.titre}</h3>
+              <p>{c.description?.substring(0, 100)}...</p>
 
-            <div style={{
-              display: 'grid',
-              gridTemplateColumns: 'repeat(auto-fill,minmax(300px,1fr))',
-              gap: '20px',
-              marginTop: '20px'
-            }}>
-              {coursList.map((c, index) => {
+              <div style={{ display: 'flex', gap: 15, flexWrap: 'wrap' }}>
+                <span>⏱️ {c.duree || '-'}</span>
+                <span>💰 {c.prix || 0} FCFA</span>
+                <span>📊 {c.niveau}</span>
+                <span>{c.estPremium ? '💎 Premium' : '🆓 Gratuit'}</span>
+              </div>
 
-                const weekIndex = c.semaine || index;
-                const unlocked = isUnlocked(weekIndex, c.createdAt);
-                const unlockDate = getUnlockDate(weekIndex, c.createdAt);
+              <div style={{ marginTop: 15 }}>
+                <Link to={`/cours/${c._id}`} className="btn">
+                  📖 Voir le cours
+                </Link>
+              </div>
 
-                return (
-                  <div key={c._id} style={{
-                    border: '1px solid #ddd',
-                    padding: '15px',
-                    borderRadius: '10px'
-                  }}>
-
-                    <h3>{c.titre}</h3>
-
-                    <p>{c.description?.substring(0, 80)}...</p>
-
-                    <p>💰 {formatPrix(c.prix)}</p>
-
-                    {/* 🔒 PREMIUM */}
-                    {c.estPremium && !isPremiumUser ? (
-                      <button onClick={() => handleAcheter(c)}>
-                        🔓 Acheter
-                      </button>
-
-                    ) : !unlocked ? (
-                      <>
-                        <button disabled>🔒 Bientôt disponible</button>
-                        <p style={{ fontSize: '12px' }}>
-                          📅 {unlockDate.toLocaleDateString()}
-                        </p>
-                      </>
-                    ) : (
-                      <button onClick={() => window.location.href = `/cours/${c._id}`}>
-                        📖 Voir
-                      </button>
-                    )}
-
-                  </div>
-                );
-              })}
+              {userRole === 'admin' && (
+                <div style={{ display: 'flex', gap: 10, marginTop: 15 }}>
+                  <button className="btn btn-warning" onClick={() => handleEdit(c)}>
+                    ✏️ Modifier
+                  </button>
+                  <button className="btn btn-danger" onClick={() => handleDelete(c._id)}>
+                    🗑️ Supprimer
+                  </button>
+                </div>
+              )}
             </div>
-          </div>
-        ))
-      )}
-
-      {/* 💳 MODAL */}
-      {showPayment && selectedCours && (
-        <div style={{
-          position: 'fixed',
-          top: 0, left: 0, right: 0, bottom: 0,
-          background: 'rgba(0,0,0,0.5)',
-          display: 'flex',
-          justifyContent: 'center',
-          alignItems: 'center'
-        }}>
-          <div style={{ background: '#fff', padding: '20px', borderRadius: '10px' }}>
-            <h3>{selectedCours.titre}</h3>
-            <p>{formatPrix(selectedCours.prix)}</p>
-
-            <button onClick={() => window.location.href = `/paiement/${selectedCours._id}`}>
-              💳 Payer
-            </button>
-
-            <button onClick={() => setShowPayment(false)}>
-              ❌ Annuler
-            </button>
-          </div>
+          ))}
         </div>
       )}
 
+      {showModal && (
+        <CoursEditModal
+          cours={selectedCours}
+          token={token}
+          onClose={() => setShowModal(false)}
+          onUpdate={handleUpdate}
+        />
+      )}
     </div>
   );
-};
+}
 
 export default CoursList;

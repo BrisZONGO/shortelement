@@ -1,18 +1,11 @@
 
 const User = require("../models/User");
 
-/**
- * Middleware pour vérifier si l'utilisateur a un abonnement actif
- * @param {Object} req - Requête Express
- * @param {Object} res - Réponse Express
- * @param {Function} next - Fonction suivante
- */
 const checkAbonnement = async (req, res, next) => {
   try {
-    // Récupérer l'utilisateur depuis la base de données
-    const user = await User.findById(req.userId);
+    const userId = req.user?.id || req.userId;
+    const user = await User.findById(userId);
 
-    // Vérifier si l'utilisateur existe
     if (!user) {
       return res.status(404).json({
         success: false,
@@ -20,7 +13,6 @@ const checkAbonnement = async (req, res, next) => {
       });
     }
 
-    // Vérifier si l'abonnement existe et est actif
     if (!user.abonnement || !user.abonnement.actif) {
       return res.status(403).json({
         success: false,
@@ -30,9 +22,7 @@ const checkAbonnement = async (req, res, next) => {
 
     const now = new Date();
 
-    // Vérifier si l'abonnement n'a pas expiré
     if (user.abonnement.expiration && new Date(user.abonnement.expiration) < now) {
-      // Désactiver automatiquement l'abonnement expiré
       user.abonnement.actif = false;
       await user.save();
 
@@ -43,22 +33,13 @@ const checkAbonnement = async (req, res, next) => {
       });
     }
 
-    // Calculer les jours restants (optionnel - pour info)
-    if (user.abonnement.expiration) {
-      const joursRestants = Math.ceil((new Date(user.abonnement.expiration) - now) / (1000 * 60 * 60 * 24));
-      
-      // Ajouter les infos d'abonnement à la requête pour utilisation ultérieure
-      req.abonnement = {
-        actif: true,
-        expiration: user.abonnement.expiration,
-        joursRestants: joursRestants,
-        forfait: user.abonnement.forfait
-      };
-    }
+    req.abonnement = {
+      actif: true,
+      expiration: user.abonnement.expiration || null,
+      forfait: user.abonnement.forfait || null
+    };
 
-    // Tout est bon, passer au prochain middleware/route
     next();
-
   } catch (err) {
     console.error("❌ Erreur dans checkAbonnement:", err);
     res.status(500).json({
