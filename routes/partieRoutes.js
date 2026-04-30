@@ -9,17 +9,18 @@ const {
   reorderParties
 } = require("../controllers/partieController");
 
-const { protect, isAdmin } = require("../middleware/auth");
+const { protect, isAdmin, optionalAuth } = require("../middleware/auth");
+const checkCourseAccess = require("../middleware/checkCourseAccess");
 
 const router = express.Router();
 
 // =============================
-// 📄 PUBLIC
+// 📄 LECTURE
 // =============================
 
-router.get("/module/:moduleId", getPartiesByModule);
+router.get("/module/:moduleId", optionalAuth, checkCourseAccess, getPartiesByModule);
 
-router.get("/:id", getPartieById);
+router.get("/:id", optionalAuth, checkCourseAccess, getPartieById);
 
 // =============================
 // 👑 ADMIN

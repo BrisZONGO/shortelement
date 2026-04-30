@@ -8,20 +8,18 @@ const {
   deleteModule
 } = require("../controllers/moduleController");
 
-const { protect, isAdmin } = require("../middleware/auth");
+const { protect, isAdmin, optionalAuth } = require("../middleware/auth");
+const checkCourseAccess = require("../middleware/checkCourseAccess");
 
 const router = express.Router();
 
 // =============================
-// 📦 ROUTES PUBLIQUES
+// 📦 ROUTES LECTURE
 // =============================
 
-// Modules d'un cours
-router.get("/cours/:coursId", getModulesByCours);
+router.get("/cours/:coursId", optionalAuth, checkCourseAccess, getModulesByCours);
 
-// Module + parties
-router.get("/:id", getModuleWithParties);
-
+router.get("/:id", optionalAuth, checkCourseAccess, getModuleWithParties);
 
 // =============================
 // 👑 ADMIN
