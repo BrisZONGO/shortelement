@@ -1,41 +1,62 @@
-const mongoose = require('mongoose');
+const mongoose = require("mongoose");
+
+const questionQCMSchema = new mongoose.Schema(
+  {
+    texte: { type: String, default: "" },
+    propositions: [{ type: String }],
+    bonneReponse: { type: String, default: "" },
+    commentaire: { type: String, default: "" },
+    explication: { type: String, default: "" },
+    points: { type: Number, default: 1 }
+  },
+  { _id: false }
+);
 
 const contenuSchema = new mongoose.Schema(
   {
     kind: {
       type: String,
-      enum: ['document', 'video', 'qcm', 'exercice', 'reponse', 'ressource'],
+      enum: ["document", "video", "qcm", "exercice", "reponse", "ressource"],
       required: true
     },
     titre: {
       type: String,
-      default: ''
+      default: ""
     },
     texte: {
       type: String,
-      default: ''
+      default: ""
     },
     url: {
       type: String,
-      default: ''
+      default: ""
     },
     fichierUrl: {
       type: String,
-      default: ''
+      default: ""
     },
     fichierNom: {
       type: String,
-      default: ''
+      default: ""
     },
     mimeType: {
       type: String,
-      default: ''
+      default: ""
     },
     extension: {
       type: String,
-      default: ''
+      default: ""
     },
     ordre: {
+      type: Number,
+      default: 0
+    },
+
+    // pour QCM / exercice
+    questions: [questionQCMSchema],
+
+    // note max de ce bloc
+    pointsMax: {
       type: Number,
       default: 0
     }
@@ -46,7 +67,7 @@ const contenuSchema = new mongoose.Schema(
 const partieSchema = new mongoose.Schema({
   moduleId: {
     type: mongoose.Schema.Types.ObjectId,
-    ref: 'Module',
+    ref: "Module",
     required: true
   },
   titre: {
@@ -55,44 +76,39 @@ const partieSchema = new mongoose.Schema({
   },
   description: {
     type: String,
-    default: ''
+    default: ""
   },
 
-  // Compatibilité ancien système
+  // compat ancien système
   contenu: {
     type: String,
-    default: ''
+    default: ""
   },
   type: {
     type: String,
-    enum: ['video', 'document', 'qcm', 'exercice', 'reponse', 'ressource'],
-    default: 'document'
+    enum: ["video", "document", "qcm", "exercice", "reponse", "ressource"],
+    default: "document"
   },
   url: {
     type: String,
-    default: ''
+    default: ""
   },
 
-  // Nouveau système
+  // nouveau système
   typesDisponibles: [{
     type: String,
-    enum: ['video', 'document', 'qcm', 'exercice', 'reponse', 'ressource']
+    enum: ["video", "document", "qcm", "exercice", "reponse", "ressource"]
   }],
   contenus: [contenuSchema],
 
   duree: {
     type: String,
-    default: ''
+    default: ""
   },
   ordre: {
     type: Number,
     default: 0
   },
-  ressources: [{
-    titre: String,
-    url: String,
-    type: String
-  }],
   estGratuit: {
     type: Boolean,
     default: false
@@ -109,4 +125,4 @@ const partieSchema = new mongoose.Schema({
 
 partieSchema.index({ moduleId: 1, ordre: 1 });
 
-module.exports = mongoose.model('Partie', partieSchema);
+module.exports = mongoose.model("Partie", partieSchema);
