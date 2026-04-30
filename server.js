@@ -23,12 +23,13 @@ const paymentRoutes = require('./routes/paymentRoutes');
 const adminRoutes = require('./routes/adminRoutes');
 const partieRoutes = require('./routes/partieRoutes');
 const moduleRoutes = require('./routes/moduleRoutes');
+const uploadRoutes = require('./routes/uploadRoutes');
 
 // ✅ CRON
 const { startCronJobs } = require('./services/cronService');
 
 // =============================
-// 🔥 CORS CONFIG (AMÉLIORÉ)
+// 🔥 CORS CONFIG
 // =============================
 const allowedOrigins = [
   'http://localhost:3000',
@@ -54,55 +55,51 @@ app.use(cors({
   credentials: true
 }));
 
-// ✅ Gestion explicite OPTIONS (important pour frontend)
 app.options('*', cors());
 
 // =============================
 // 📦 MIDDLEWARES
 // =============================
-app.use(express.json());
-app.use(express.urlencoded({ extended: true }));
+app.use(express.json({ limit: '50mb' }));
+app.use(express.urlencoded({ extended: true, limit: '50mb' }));
 
-// Fichiers statiques
+// =============================
+// 📁 FICHIERS STATIQUES
+// =============================
 app.use(express.static(path.join(__dirname, 'public')));
 app.use('/uploads', express.static(path.join(__dirname, 'uploads')));
 
 // =============================
-// 🌐 ROUTES TEST (ANTI-404)
+// 🌐 ROUTES TEST
 // =============================
-
-// 👉 TEST MODULES
 app.get('/api/modules/test', (req, res) => {
-  res.json({ success: true, message: "Modules OK" });
+  res.json({ success: true, message: 'Modules OK' });
 });
 
-// 👉 TEST PARTIES
 app.get('/api/parties/test', (req, res) => {
-  res.json({ success: true, message: "Parties OK" });
+  res.json({ success: true, message: 'Parties OK' });
 });
 
-// =============================
-// 🌐 ROUTES PUBLIQUES
-// =============================
 app.get('/', (req, res) => {
   res.json({
     success: true,
-    message: "API Concours OK",
-    version: "2.0.0",
+    message: 'API Concours OK',
+    version: '2.1.0',
     endpoints: {
-      auth: "/api/auth",
-      cours: "/api/cours",
-      payment: "/api/payment",
-      admin: "/api/admin",
-      modules: "/api/modules",
-      parties: "/api/parties"
+      auth: '/api/auth',
+      cours: '/api/cours',
+      payment: '/api/payment',
+      admin: '/api/admin',
+      modules: '/api/modules',
+      parties: '/api/parties',
+      upload: '/api/upload'
     }
   });
 });
 
 app.get('/health', (req, res) => {
   res.json({
-    status: "ok",
+    status: 'ok',
     db: mongoose.connection.readyState === 1,
     timestamp: new Date().toISOString()
   });
@@ -117,6 +114,7 @@ app.use('/api/payment', paymentRoutes);
 app.use('/api/admin', adminRoutes);
 app.use('/api/modules', moduleRoutes);
 app.use('/api/parties', partieRoutes);
+app.use('/api/upload', uploadRoutes);
 
 // =============================
 // ❌ 404 HANDLER
@@ -133,11 +131,11 @@ app.use((req, res) => {
 // ❌ ERROR HANDLER GLOBAL
 // =============================
 app.use((err, req, res, next) => {
-  console.error("🔥 ERREUR:", err.message);
+  console.error('🔥 ERREUR:', err.message);
 
   res.status(err.status || 500).json({
     success: false,
-    message: err.message || "Erreur serveur"
+    message: err.message || 'Erreur serveur'
   });
 });
 
@@ -146,10 +144,9 @@ app.use((err, req, res, next) => {
 // =============================
 const PORT = process.env.PORT || 5000;
 
-// Vérification ENV
 const checkEnv = () => {
   const required = ['MONGODB_URI', 'JWT_SECRET'];
-  const missing = required.filter(e => !process.env[e]);
+  const missing = required.filter((e) => !process.env[e]);
 
   if (missing.length) {
     console.error(`❌ Variables manquantes: ${missing.join(', ')}`);
@@ -162,12 +159,11 @@ const startServer = async () => {
   try {
     if (!checkEnv()) process.exit(1);
 
-    console.log("🔄 Connexion MongoDB...");
+    console.log('🔄 Connexion MongoDB...');
     await mongoose.connect(process.env.MONGODB_URI);
 
-    console.log("✅ MongoDB connecté");
+    console.log('✅ MongoDB connecté');
 
-    // ✅ CRON
     startCronJobs();
 
     app.listen(PORT, () => {
@@ -181,11 +177,11 @@ const startServer = async () => {
 💓 /health OK
 📦 Modules OK → /api/modules/test
 📦 Parties OK → /api/parties/test
+📤 Upload OK → /api/upload
       `);
     });
-
   } catch (err) {
-    console.error("❌ Erreur démarrage:", err.message);
+    console.error('❌ Erreur démarrage:', err.message);
     process.exit(1);
   }
 };
@@ -199,5 +195,4 @@ process.on('SIGINT', async () => {
   process.exit(0);
 });
 
-// START
 startServer();

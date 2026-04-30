@@ -17,7 +17,6 @@ const router = express.Router();
 // =============================
 // 📄 LECTURE
 // =============================
-
 router.get("/module/:moduleId", optionalAuth, checkCourseAccess, getPartiesByModule);
 
 router.get("/:id", optionalAuth, checkCourseAccess, getPartieById);
@@ -34,3 +33,4 @@ router.delete("/:id", protect, isAdmin, deletePartie);
 router.put("/reorder", protect, isAdmin, reorderParties);
 
 module.exports = router;
+
