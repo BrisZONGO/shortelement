@@ -19,47 +19,16 @@ const contenuSchema = new mongoose.Schema(
       enum: ["document", "video", "qcm", "exercice", "reponse", "ressource"],
       required: true
     },
-    titre: {
-      type: String,
-      default: ""
-    },
-    texte: {
-      type: String,
-      default: ""
-    },
-    url: {
-      type: String,
-      default: ""
-    },
-    fichierUrl: {
-      type: String,
-      default: ""
-    },
-    fichierNom: {
-      type: String,
-      default: ""
-    },
-    mimeType: {
-      type: String,
-      default: ""
-    },
-    extension: {
-      type: String,
-      default: ""
-    },
-    ordre: {
-      type: Number,
-      default: 0
-    },
-
-    // pour QCM / exercice
+    titre: { type: String, default: "" },
+    texte: { type: String, default: "" },
+    url: { type: String, default: "" },
+    fichierUrl: { type: String, default: "" },
+    fichierNom: { type: String, default: "" },
+    mimeType: { type: String, default: "" },
+    extension: { type: String, default: "" },
+    ordre: { type: Number, default: 0 },
     questions: [questionQCMSchema],
-
-    // note max de ce bloc
-    pointsMax: {
-      type: Number,
-      default: 0
-    }
+    pointsMax: { type: Number, default: 0 }
   },
   { _id: false }
 );
@@ -78,8 +47,6 @@ const partieSchema = new mongoose.Schema({
     type: String,
     default: ""
   },
-
-  // compat ancien système
   contenu: {
     type: String,
     default: ""
@@ -93,14 +60,11 @@ const partieSchema = new mongoose.Schema({
     type: String,
     default: ""
   },
-
-  // nouveau système
   typesDisponibles: [{
     type: String,
     enum: ["video", "document", "qcm", "exercice", "reponse", "ressource"]
   }],
   contenus: [contenuSchema],
-
   duree: {
     type: String,
     default: ""
@@ -126,3 +90,4 @@ const partieSchema = new mongoose.Schema({
 partieSchema.index({ moduleId: 1, ordre: 1 });
 
 module.exports = mongoose.model("Partie", partieSchema);
+

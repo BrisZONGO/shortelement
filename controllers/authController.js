@@ -1,28 +1,49 @@
 const User = require('../models/User');
 const jwt = require('jsonwebtoken');
-const bcrypt = require('bcryptjs');
 
 const SECRET_KEY =
   process.env.JWT_SECRET || 'votre_cle_secrete_tres_longue_et_complexe_123456789';
+
+const sanitizePhone = (value = '') => value.trim();
+
+const buildUserResponse = (user) => ({
+  id: user._id,
+  nom: user.nom,
+  prenom: user.prenom,
+  email: user.email,
+  telephone: user.telephone || '',
+  role: user.role,
+  abonnement: user.abonnement
+});
 
 // Inscription
 const inscription = async (req, res) => {
   try {
     const { nom, prenom, password } = req.body;
     const email = req.body.email?.trim().toLowerCase();
+    const telephone = sanitizePhone(req.body.telephone || '');
+
+    if (!nom || !email || !password) {
+      return res.status(400).json({
+        success: false,
+        message: 'Nom, email et mot de passe sont requis'
+      });
+    }
 
     const existingUser = await User.findOne({ email });
     if (existingUser) {
-      return res.status(400).json({ message: 'Cet email est déjà utilisé' });
+      return res.status(400).json({
+        success: false,
+        message: 'Cet email est déjà utilisé'
+      });
     }
 
-    const hashedPassword = await bcrypt.hash(password, 10);
-
     const user = new User({
-      nom,
-      prenom,
+      nom: nom.trim(),
+      prenom: (prenom || '').trim(),
       email,
-      password: hashedPassword,
+      password,
+      telephone,
       role: 'user'
     });
 
@@ -37,17 +58,14 @@ const inscription = async (req, res) => {
     res.status(201).json({
       success: true,
       token,
-      user: {
-        id: user._id,
-        nom: user.nom,
-        prenom: user.prenom,
-        email: user.email,
-        role: user.role
-      }
+      user: buildUserResponse(user)
     });
   } catch (error) {
-    console.error(error);
-    res.status(500).json({ message: 'Erreur serveur' });
+    console.error('❌ inscription:', error);
+    res.status(500).json({
+      success: false,
+      message: 'Erreur serveur'
+    });
   }
 };
 
@@ -59,12 +77,18 @@ const connexion = async (req, res) => {
 
     const user = await User.findOne({ email });
     if (!user) {
-      return res.status(401).json({ message: 'Email ou mot de passe incorrect' });
+      return res.status(401).json({
+        success: false,
+        message: 'Email ou mot de passe incorrect'
+      });
     }
 
-    const isValid = await bcrypt.compare(password, user.password);
+    const isValid = await user.comparePassword(password);
     if (!isValid) {
-      return res.status(401).json({ message: 'Email ou mot de passe incorrect' });
+      return res.status(401).json({
+        success: false,
+        message: 'Email ou mot de passe incorrect'
+      });
     }
 
     const token = jwt.sign(
@@ -76,19 +100,43 @@ const connexion = async (req, res) => {
     res.json({
       success: true,
       token,
-      user: {
-        id: user._id,
-        nom: user.nom,
-        prenom: user.prenom,
-        email: user.email,
-        role: user.role
-      }
+      user: buildUserResponse(user)
     });
   } catch (error) {
-    console.error(error);
-    res.status(500).json({ message: 'Erreur serveur' });
+    console.error('❌ connexion:', error);
+    res.status(500).json({
+      success: false,
+      message: 'Erreur serveur'
+    });
   }
 };
 
-module.exports = { inscription, connexion };
+const profil = async (req, res) => {
+  try {
+    const user = await User.findById(req.user.id).select('-password');
 
+    if (!user) {
+      return res.status(404).json({
+        success: false,
+        message: 'Utilisateur introuvable'
+      });
+    }
+
+    res.json({
+      success: true,
+      user: buildUserResponse(user)
+    });
+  } catch (error) {
+    console.error('❌ profil:', error);
+    res.status(500).json({
+      success: false,
+      message: 'Erreur serveur'
+    });
+  }
+};
+
+module.exports = {
+  inscription,
+  connexion,
+  profil
+};

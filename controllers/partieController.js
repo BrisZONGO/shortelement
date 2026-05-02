@@ -66,13 +66,9 @@ const shouldUnlockResponses = (pourcentage, tentativeNumero) => {
   return false;
 };
 
-// =============================
-// ➕ CREATE PARTIE
-// =============================
 exports.createPartie = async (req, res) => {
   try {
     const payload = buildPayload(req.body);
-
     const partie = await Partie.create(payload);
 
     res.status(201).json({
@@ -88,9 +84,6 @@ exports.createPartie = async (req, res) => {
   }
 };
 
-// =============================
-// 📄 GET PARTIES BY MODULE
-// =============================
 exports.getPartiesByModule = async (req, res) => {
   try {
     const parties = await Partie.find({
@@ -111,9 +104,6 @@ exports.getPartiesByModule = async (req, res) => {
   }
 };
 
-// =============================
-// 📄 GET PARTIE BY ID
-// =============================
 exports.getPartieById = async (req, res) => {
   try {
     const partie = await Partie.findById(req.params.id);
@@ -138,9 +128,6 @@ exports.getPartieById = async (req, res) => {
   }
 };
 
-// =============================
-// ✏️ UPDATE PARTIE
-// =============================
 exports.updatePartie = async (req, res) => {
   try {
     const payload = buildPayload(req.body);
@@ -171,9 +158,6 @@ exports.updatePartie = async (req, res) => {
   }
 };
 
-// =============================
-// 🗑️ DELETE PARTIE
-// =============================
 exports.deletePartie = async (req, res) => {
   try {
     const partie = await Partie.findByIdAndDelete(req.params.id);
@@ -200,9 +184,6 @@ exports.deletePartie = async (req, res) => {
   }
 };
 
-// =============================
-// 🔄 REORDER PARTIES
-// =============================
 exports.reorderParties = async (req, res) => {
   try {
     const { ordre } = req.body;
@@ -231,9 +212,6 @@ exports.reorderParties = async (req, res) => {
   }
 };
 
-// =============================
-// ✅ SUBMIT TRAITEMENT PARTIE
-// =============================
 exports.submitTraitementPartie = async (req, res) => {
   try {
     const partie = await Partie.findById(req.params.id);
@@ -260,16 +238,22 @@ exports.submitTraitementPartie = async (req, res) => {
     let noteMaxTotale = 0;
 
     const contenusCorrigeables = (partie.contenus || []).filter(
-      (contenu) => contenu.kind === "qcm" || contenu.kind === "exercice"
+      (contenu) =>
+        contenu.kind === "qcm" ||
+        contenu.kind === "exercice" ||
+        contenu.kind === "document" ||
+        contenu.kind === "video" ||
+        contenu.kind === "ressource"
     );
 
     contenusCorrigeables.forEach((contenu, contenuIndex) => {
       const submitted = submittedResults.find((r) => r.contenuIndex === contenuIndex) || {};
       const noteObtenue = Number(submitted.noteObtenue || 0);
+
       const noteMax =
         contenu.kind === "qcm"
           ? (contenu.questions || []).reduce((sum, q) => sum + Number(q.points || 1), 0)
-          : Number(contenu.pointsMax || submitted.noteMax || 0);
+          : Number(contenu.pointsMax || submitted.noteMax || 1);
 
       resultats.push({
         contenuIndex,
@@ -277,7 +261,11 @@ exports.submitTraitementPartie = async (req, res) => {
         titre: contenu.titre,
         noteObtenue,
         noteMax,
-        reponseUtilisateur: submitted.reponseUtilisateur || null
+        reponseUtilisateur: submitted.reponseUtilisateur || null,
+        fichierReponseUrl: submitted.fichierReponseUrl || "",
+        fichierReponseNom: submitted.fichierReponseNom || "",
+        mimeType: submitted.mimeType || "",
+        extension: submitted.extension || ""
       });
 
       noteTotale += noteObtenue;
@@ -325,9 +313,6 @@ exports.submitTraitementPartie = async (req, res) => {
   }
 };
 
-// =============================
-// 📊 GET TENTATIVES USER
-// =============================
 exports.getTentativesPartieForUser = async (req, res) => {
   try {
     const tentatives = await TentativeSousModule.find({
@@ -348,9 +333,6 @@ exports.getTentativesPartieForUser = async (req, res) => {
   }
 };
 
-// =============================
-// 📘 GET CORRECTION
-// =============================
 exports.getCorrectionPartie = async (req, res) => {
   try {
     const partie = await Partie.findById(req.params.id);
@@ -408,3 +390,4 @@ exports.getCorrectionPartie = async (req, res) => {
     });
   }
 };
+

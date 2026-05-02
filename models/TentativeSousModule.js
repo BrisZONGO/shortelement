@@ -16,6 +16,22 @@ const itemResultSchema = new mongoose.Schema(
     reponseUtilisateur: {
       type: mongoose.Schema.Types.Mixed,
       default: null
+    },
+    fichierReponseUrl: {
+      type: String,
+      default: ""
+    },
+    fichierReponseNom: {
+      type: String,
+      default: ""
+    },
+    mimeType: {
+      type: String,
+      default: ""
+    },
+    extension: {
+      type: String,
+      default: ""
     }
   },
   { _id: false }
@@ -62,6 +78,9 @@ const tentativeSousModuleSchema = new mongoose.Schema(
   { timestamps: true }
 );
 
-tentativeSousModuleSchema.index({ partieId: 1, userId: 1, tentativeNumero: 1 }, { unique: true });
+tentativeSousModuleSchema.index(
+  { partieId: 1, userId: 1, tentativeNumero: 1 },
+  { unique: true }
+);
 
 module.exports = mongoose.model("TentativeSousModule", tentativeSousModuleSchema);

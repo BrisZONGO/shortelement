@@ -1,24 +1,24 @@
-const express = require('express');
-const path = require('path');
-const upload = require('../middleware/upload');
-const { protect, isAdmin } = require('../middleware/auth');
+const express = require("express");
+const path = require("path");
+const upload = require("../middleware/upload");
+const { protect } = require("../middleware/auth");
 
 const router = express.Router();
 
-router.post('/', protect, isAdmin, upload.single('file'), async (req, res) => {
+router.post("/", protect, upload.single("file"), async (req, res) => {
   try {
     if (!req.file) {
       return res.status(400).json({
         success: false,
-        message: 'Aucun fichier uploadé'
+        message: "Aucun fichier uploadé"
       });
     }
 
-    const extension = path.extname(req.file.originalname || '').replace('.', '');
+    const extension = path.extname(req.file.originalname || "").replace(".", "");
 
     res.status(201).json({
       success: true,
-      message: 'Fichier uploadé avec succès',
+      message: "Fichier uploadé avec succès",
       file: {
         nom: req.file.originalname,
         filename: req.file.filename,
@@ -29,7 +29,7 @@ router.post('/', protect, isAdmin, upload.single('file'), async (req, res) => {
       }
     });
   } catch (error) {
-    console.error('❌ Erreur upload:', error);
+    console.error("❌ Erreur upload:", error);
     res.status(500).json({
       success: false,
       message: error.message
@@ -38,4 +38,6 @@ router.post('/', protect, isAdmin, upload.single('file'), async (req, res) => {
 });
 
 module.exports = router;
+
+
 
